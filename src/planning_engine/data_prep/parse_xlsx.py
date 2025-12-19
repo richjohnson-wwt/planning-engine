@@ -6,24 +6,29 @@ def parse_excel_to_csv(
     file_path: str,
     output_path: str,
     column_mapping: dict[str, str] | None = None
-) -> Path:
+) -> dict[str, Path]:
     """
-    Parse an Excel file, rename columns according to mapping, and save to CSV.
+    Parse an Excel file, rename columns according to mapping, and save to CSV files organized by state.
+    
+    Sites are grouped by state and written to separate folders:
+    - data/workspace/{workspace}/input/{STATE}/addresses.csv
     
     Args:
         file_path: Path to the input Excel file
-        output_path: Path where the CSV file should be saved
+        output_path: Base path for output (e.g., data/workspace/{workspace}/input/addresses.csv)
+                    State folders will be created under the parent directory
         column_mapping: Dict mapping standard field names to Excel column names.
                        Format: {standard_name: excel_column_name}
                        Example: {"site_id": "Location", "street1": "MyStreet1"}
                        If None, includes all columns with original names.
         
     Returns:
-        Path to the created CSV file
+        Dict mapping state names to their CSV file paths
+        Example: {"LA": Path("data/workspace/foobar/input/LA/addresses.csv"), ...}
         
     Raises:
         FileNotFoundError: If the Excel file doesn't exist
-        ValueError: If mapped columns don't exist in the Excel file
+        ValueError: If mapped columns don't exist in the Excel file or 'state' column is missing
     """
     # Read Excel file with openpyxl engine
     df = pd.read_excel(file_path, engine='openpyxl')
@@ -50,11 +55,34 @@ def parse_excel_to_csv(
         # Rename columns to standard names
         df = df.rename(columns=reverse_mapping)
     
-    # Ensure output directory exists
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    # Validate that 'state' column exists
+    if 'state' not in df.columns:
+        raise ValueError(
+            "Column 'state' is required for organizing sites by state. "
+            "Make sure your column_mapping includes 'state'."
+        )
     
-    # Save to CSV
-    df.to_csv(output_file, index=False)
+    # Get base directory (parent of the output_path)
+    base_output = Path(output_path)
+    base_dir = base_output.parent
     
-    return output_file
+    # Group by state and save each state to its own folder
+    state_files = {}
+    states = df['state'].unique()
+    
+    for state in states:
+        # Filter data for this state
+        state_df = df[df['state'] == state]
+        
+        # Create state-specific directory
+        state_dir = base_dir / str(state)
+        state_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save to state-specific CSV file
+        state_file = state_dir / "addresses.csv"
+        state_df.to_csv(state_file, index=False)
+        
+        state_files[str(state)] = state_file
+        print(f"  ✓ Saved {len(state_df)} sites for state '{state}' to {state_file}")
+    
+    return state_files

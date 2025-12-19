@@ -21,7 +21,7 @@ from planning_engine import (
 from planning_engine.models import PlanRequest, TeamConfig, Workday
 
 # Configuration
-WORKSPACE_NAME = "complete_workflow_demo"
+WORKSPACE_NAME = "complete_workflow_demo2"
 EXCEL_FILE = "examples/acme.xlsx"  # Your Excel file with addresses
 
 # Column mapping: maps your Excel columns to standard fields
@@ -193,7 +193,7 @@ def main():
         
         for idx, td in enumerate(team_schedule[team_id], 1):
             site_names = [s.name for s in sites if s.id in td.site_ids]
-            day_line = f"  Day {idx}: {len(td.site_ids)} sites ({td.total_minutes} minutes)"
+            day_line = f"  Day {idx}: {len(td.site_ids)} sites ({td.route_minutes} minutes)"
             print(day_line)
             output_lines.append(day_line)
             

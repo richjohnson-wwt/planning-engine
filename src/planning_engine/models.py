@@ -51,6 +51,7 @@ class PlanRequest(BaseModel):
     
     # Filtering options
     state_abbr: Optional[str] = None  # Filter sites by state abbreviation (e.g., "LA", "NC")
+    use_clusters: bool = False  # If True, load from clustered.csv and plan each cluster separately
     
     # OR-Tools solver specific fields
     start_date: Optional[date] = None

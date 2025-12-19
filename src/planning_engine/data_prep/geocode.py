@@ -40,9 +40,15 @@ def batch_geocode_sites(addresses: list[str]) -> list[dict]:
     print(f"  Job ID: {job_data['id']}")
     print(f"  Status: {job_data.get('status', 'unknown')}")
 
-    # Poll for completion
-    while True:
+    # Poll for completion with timeout
+    max_attempts = 60  # 5 minutes max (60 attempts * 5 seconds)
+    attempts = 0
+    
+    while attempts < max_attempts:
+        attempts += 1
         status_resp = requests.get(job_url)
+        
+        print(f"Polling attempt {attempts}/{max_attempts}: HTTP {status_resp.status_code}")
         
         # When the job is finished, status code is 200 and the response IS the results array
         if status_resp.status_code == 200:
@@ -57,10 +63,17 @@ def batch_geocode_sites(addresses: list[str]) -> list[dict]:
         # When still pending, status code is 202 and response has status field
         elif status_resp.status_code == 202:
             status_data = status_resp.json()
+            print(f"  Status data: {status_data}")
             if status_data.get("status") == "failed":
                 raise Exception(f"Geocoding job failed: {status_data.get('message', 'Unknown error')}")
             print(f"Geocoding in progress... waiting 5 seconds")
             time.sleep(5)
         
         else:
-            raise Exception(f"Unexpected HTTP status {status_resp.status_code}: {status_resp.text}")
+            # Log the full response for debugging
+            print(f"Unexpected HTTP status {status_resp.status_code}")
+            print(f"Response body: {status_resp.text[:500]}")  # First 500 chars
+            raise Exception(f"Unexpected HTTP status {status_resp.status_code}: {status_resp.text[:200]}")
+    
+    # Timeout reached
+    raise Exception(f"Geocoding job timed out after {max_attempts * 5} seconds. Job may still be processing.")

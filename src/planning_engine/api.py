@@ -6,19 +6,27 @@ from .models import PlanRequest, PlanResult, TeamDay, Site
 
 def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
     """
-    Load sites from workspace's geocoded.csv file.
+    Load sites from workspace's state-specific geocoded.csv file.
     
     Args:
         workspace_name: Name of the workspace
-        state_abbr: Optional state abbreviation to filter sites (e.g., "LA", "NC")
+        state_abbr: State abbreviation to load sites for (e.g., "LA", "NC"). Required.
         
     Returns:
         List of Site objects
         
     Raises:
         FileNotFoundError: If workspace or geocoded.csv doesn't exist
+        ValueError: If state_abbr is not provided
     """
     import pandas as pd
+    
+    # Validate state_abbr is provided
+    if not state_abbr:
+        raise ValueError(
+            "state_abbr is required to load sites. "
+            "Specify which state's sites to load (e.g., 'LA', 'NC')"
+        )
     
     # Validate workspace exists
     workspace_path = Path("data") / "workspace" / workspace_name
@@ -28,24 +36,16 @@ def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = 
             f"Create it first using new_workspace('{workspace_name}')"
         )
     
-    # Check if geocoded.csv exists
-    geocoded_csv = workspace_path / "cache" / "geocoded.csv"
+    # Check if state-specific geocoded.csv exists
+    geocoded_csv = workspace_path / "cache" / state_abbr / "geocoded.csv"
     if not geocoded_csv.exists():
         raise FileNotFoundError(
-            f"geocoded.csv not found in workspace '{workspace_name}'. "
-            f"Run geocode() first to create geocoded.csv"
+            f"geocoded.csv not found for state '{state_abbr}' in workspace '{workspace_name}'. "
+            f"Expected path: {geocoded_csv}. Run geocode() first to create geocoded.csv"
         )
     
     # Read geocoded data
     df = pd.read_csv(geocoded_csv)
-    
-    # Filter by state if provided
-    if state_abbr:
-        df = df[df['state'] == state_abbr.upper()]
-        if len(df) == 0:
-            raise ValueError(
-                f"No sites found for state '{state_abbr}' in workspace '{workspace_name}'"
-            )
     
     # Convert to Site objects
     sites = []
@@ -70,7 +70,12 @@ def plan(request: PlanRequest) -> PlanResult:
     for optimized multi-day VRPTW routing. Otherwise, uses simple assignment.
     
     Sites can be provided explicitly or auto-loaded from geocoded.csv filtered by state_abbr.
+    If use_clusters is True, loads from clustered.csv and plans each cluster separately.
     """
+    # Handle cluster-based planning
+    if request.use_clusters:
+        return _plan_with_clusters(request)
+    
     # Load sites from geocoded.csv if not provided
     if request.sites is None:
         request.sites = _load_sites_from_workspace(request.workspace, request.state_abbr)
@@ -97,6 +102,101 @@ def plan(request: PlanRequest) -> PlanResult:
             )
         ]
         return PlanResult(team_days=team_days)
+
+
+def _plan_with_clusters(request: PlanRequest) -> PlanResult:
+    """
+    Plan routes using cluster-based approach.
+    
+    Loads sites from clustered.csv, groups by cluster_id, plans each cluster separately,
+    and combines the results. This prevents geographic constraint issues by keeping
+    routes within cluster boundaries.
+    """
+    import pandas as pd
+    
+    # Validate state_abbr is provided
+    if not request.state_abbr:
+        raise ValueError(
+            "state_abbr is required when use_clusters is True. "
+            "Specify which state's clusters to load (e.g., 'LA', 'NC')"
+        )
+    
+    # Validate workspace exists
+    workspace_path = Path("data") / "workspace" / request.workspace
+    if not workspace_path.exists():
+        raise FileNotFoundError(
+            f"Workspace '{request.workspace}' does not exist. "
+            f"Create it first using new_workspace('{request.workspace}')"
+        )
+    
+    # Check if state-specific clustered.csv exists
+    clustered_csv = workspace_path / "cache" / request.state_abbr / "clustered.csv"
+    if not clustered_csv.exists():
+        raise FileNotFoundError(
+            f"clustered.csv not found for state '{request.state_abbr}' in workspace '{request.workspace}'. "
+            f"Expected path: {clustered_csv}. Run cluster() first to create clustered.csv"
+        )
+    
+    # Read clustered data
+    df = pd.read_csv(clustered_csv)
+    
+    # Get unique cluster IDs (convert to Python int to avoid numpy serialization issues)
+    cluster_ids = sorted([int(cid) for cid in df['cluster_id'].unique()])
+    print(f"Planning {len(cluster_ids)} clusters for state '{request.state_abbr}'...")
+    
+    all_team_days = []
+    
+    # Plan each cluster separately
+    for cluster_id in cluster_ids:
+        # Filter sites for this cluster
+        cluster_df = df[df['cluster_id'] == cluster_id]
+        
+        # Convert to Site objects
+        cluster_sites = []
+        for _, row in cluster_df.iterrows():
+            site = Site(
+                id=str(row['site_id']),
+                name=f"{row['city']} - {row['street1']}",
+                lat=float(row['lat']),
+                lon=float(row['lon']),
+                service_minutes=request.service_minutes_per_site
+            )
+            cluster_sites.append(site)
+        
+        print(f"  Cluster {cluster_id}: {len(cluster_sites)} sites")
+        
+        # Create a new request for this cluster
+        cluster_request = PlanRequest(
+            workspace=request.workspace,
+            sites=cluster_sites,
+            team_config=request.team_config,
+            state_abbr=request.state_abbr,
+            use_clusters=False,  # Prevent recursion
+            start_date=request.start_date,
+            end_date=request.end_date,
+            num_crews_available=request.num_crews_available,
+            max_route_minutes=request.max_route_minutes,
+            break_minutes=request.break_minutes,
+            holidays=request.holidays,
+            max_sites_per_crew_per_day=request.max_sites_per_crew_per_day,
+            service_minutes_per_site=request.service_minutes_per_site,
+            minimize_crews=request.minimize_crews
+        )
+        
+        # Plan this cluster
+        cluster_result = _plan_with_ortools(cluster_request)
+        
+        # Adjust team IDs to be unique across clusters
+        # Cluster 0: teams 1-9, Cluster 1: teams 10-19, etc.
+        for td in cluster_result.team_days:
+            td.team_id = td.team_id + (cluster_id * 100)
+        
+        all_team_days.extend(cluster_result.team_days)
+        print(f"    ✓ Cluster {cluster_id}: {len(cluster_result.team_days)} team-days scheduled")
+    
+    # Combine results from all clusters
+    print(f"✓ Total: {len(all_team_days)} team-days across {len(cluster_ids)} clusters")
+    return PlanResult(team_days=all_team_days, unassigned=0)
 
 
 def _plan_with_ortools(request: PlanRequest) -> PlanResult:
@@ -131,11 +231,14 @@ def parse_excel(
     workspace_name: str,
     file_path: str,
     column_mapping: dict[str, str]
-) -> Path:
+) -> dict[str, Path]:
     """
-    Parse an Excel file and save mapped columns to the workspace.
+    Parse an Excel file and save mapped columns to the workspace, organized by state.
     
     Maps client-specific Excel column names to standardized field names.
+    Sites are grouped by state and saved to separate folders:
+    - data/workspace/{workspace}/input/{STATE}/addresses.csv
+    
     Required fields: site_id, street1, city, state, zip
     Optional fields: street2
     
@@ -149,7 +252,8 @@ def parse_excel(
                        Optional: {"street2": "MyStreet2"}
         
     Returns:
-        Path to the created addresses.csv file
+        Dict mapping state names to their addresses.csv file paths
+        Example: {"LA": Path("data/workspace/foobar/input/LA/addresses.csv"), ...}
         
     Raises:
         FileNotFoundError: If the Excel file or workspace doesn't exist
@@ -184,28 +288,32 @@ def parse_excel(
     if not excel_file.exists():
         raise FileNotFoundError(f"Excel file not found: {file_path}")
     
-    # Define output path
+    # Define output path (base path - states will be organized under input/)
     output_path = workspace_path / "input" / "addresses.csv"
     
-    # Parse Excel and save to CSV
-    result_path = parse_excel_to_csv(
+    # Parse Excel and save to CSV files organized by state
+    print(f"Parsing Excel file and organizing by state...")
+    state_files = parse_excel_to_csv(
         file_path=str(excel_file),
         output_path=str(output_path),
         column_mapping=column_mapping
     )
     
-    return result_path
-
-def geocode(workspace_name: str) -> Path:
-    """
-    Geocode addresses from the workspace's addresses.csv file.
+    print(f"✓ Parsed {len(state_files)} states: {', '.join(state_files.keys())}")
     
-    Reads addresses from data/workspace/{workspace_name}/input/addresses.csv,
+    return state_files
+
+def geocode(workspace_name: str, state_abbr: str) -> Path:
+    """
+    Geocode addresses from the workspace's state-specific addresses.csv file.
+    
+    Reads addresses from data/workspace/{workspace_name}/input/{state_abbr}/addresses.csv,
     calls the batch geocoding API, and saves results to 
-    data/workspace/{workspace_name}/cache/geocoded.csv.
+    data/workspace/{workspace_name}/cache/{state_abbr}/geocoded.csv.
     
     Args:
         workspace_name: Name of the workspace containing addresses.csv
+        state_abbr: State abbreviation (e.g., "LA", "NC")
         
     Returns:
         Path to the created geocoded.csv file
@@ -225,12 +333,12 @@ def geocode(workspace_name: str) -> Path:
             f"Create it first using new_workspace('{workspace_name}')"
         )
     
-    # Check if addresses.csv exists
-    addresses_csv = workspace_path / "input" / "addresses.csv"
+    # Check if state-specific addresses.csv exists
+    addresses_csv = workspace_path / "input" / state_abbr / "addresses.csv"
     if not addresses_csv.exists():
         raise FileNotFoundError(
-            f"addresses.csv not found in workspace '{workspace_name}'. "
-            f"Run parse_excel() first to create addresses.csv"
+            f"addresses.csv not found for state '{state_abbr}' in workspace '{workspace_name}'. "
+            f"Expected path: {addresses_csv}. Run parse_excel() first to create addresses.csv"
         )
     
     # Read addresses from CSV
@@ -247,7 +355,7 @@ def geocode(workspace_name: str) -> Path:
         address = ", ".join(parts)
         addresses.append(address)
     
-    print(f"Geocoding {len(addresses)} addresses from {addresses_csv}...")
+    print(f"Geocoding {len(addresses)} addresses for state '{state_abbr}' from {addresses_csv}...")
     
     # Call batch geocoding API
     geocode_results = batch_geocode_sites(addresses)
@@ -268,25 +376,28 @@ def geocode(workspace_name: str) -> Path:
     df['lat'] = lats
     df['lon'] = lons
     
-    # Save to cache directory
-    output_path = workspace_path / "cache" / "geocoded.csv"
+    # Save to state-specific cache directory
+    cache_dir = workspace_path / "cache" / state_abbr
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    output_path = cache_dir / "geocoded.csv"
     df.to_csv(output_path, index=False)
     
-    print(f"✓ Geocoded addresses saved to: {output_path}")
+    print(f"✓ Geocoded addresses for state '{state_abbr}' saved to: {output_path}")
     
     return output_path
 
 
-def cluster(workspace_name: str) -> Path:
+def cluster(workspace_name: str, state_abbr: str) -> Path:
     """
     Cluster geocoded sites based on their geographic coordinates.
     
     Uses automatic k-means clustering with optimal cluster count determined
-    by silhouette score analysis. Reads from cache/geocoded.csv and saves
-    results to cache/clustered.csv.
+    by silhouette score analysis. Reads from cache/{state_abbr}/geocoded.csv and saves
+    results to cache/{state_abbr}/clustered.csv.
     
     Args:
         workspace_name: Name of the workspace containing geocoded.csv
+        state_abbr: State abbreviation (e.g., "LA", "NC")
         
     Returns:
         Path to the created clustered.csv file
@@ -306,25 +417,25 @@ def cluster(workspace_name: str) -> Path:
             f"Create it first using new_workspace('{workspace_name}')"
         )
     
-    # Check if geocoded.csv exists
-    geocoded_csv = workspace_path / "cache" / "geocoded.csv"
+    # Check if state-specific geocoded.csv exists
+    geocoded_csv = workspace_path / "cache" / state_abbr / "geocoded.csv"
     if not geocoded_csv.exists():
         raise FileNotFoundError(
-            f"geocoded.csv not found in workspace '{workspace_name}'. "
-            f"Run geocode() first to create geocoded.csv"
+            f"geocoded.csv not found for state '{state_abbr}' in workspace '{workspace_name}'. "
+            f"Expected path: {geocoded_csv}. Run geocode() first to create geocoded.csv"
         )
     
     # Read geocoded data
     df = pd.read_csv(geocoded_csv)
-    print(f"Clustering {len(df)} sites from {geocoded_csv}...")
+    print(f"Clustering {len(df)} sites for state '{state_abbr}' from {geocoded_csv}...")
     
     # Perform clustering
     df_clustered = cluster_sites(df)
     
-    # Save to cache directory
-    output_path = workspace_path / "cache" / "clustered.csv"
+    # Save to state-specific cache directory
+    output_path = workspace_path / "cache" / state_abbr / "clustered.csv"
     df_clustered.to_csv(output_path, index=False)
     
-    print(f"✓ Clustered sites saved to: {output_path}")
+    print(f"✓ Clustered sites for state '{state_abbr}' saved to: {output_path}")
     
     return output_path

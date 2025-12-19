@@ -46,12 +46,14 @@ class ParseExcelResponse(BaseModel):
 
 class GeocodeRequest(BaseModel):
     workspace_name: str
+    state_abbr: str
     
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "workspace_name": "my_project_2025"
+                    "workspace_name": "my_project_2025",
+                    "state_abbr": "LA"
                 }
             ]
         }
@@ -66,12 +68,14 @@ class GeocodeResponse(BaseModel):
 
 class ClusterRequest(BaseModel):
     workspace_name: str
+    state_abbr: str
     
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "workspace_name": "my_project_2025"
+                    "workspace_name": "my_project_2025",
+                    "state_abbr": "LA"
                 }
             ]
         }
@@ -97,23 +101,29 @@ def create_workspace(request: WorkspaceRequest):
 
 @app.post("/parse-excel", response_model=ParseExcelResponse)
 def parse_excel_file(request: ParseExcelRequest):
-    """Parse an Excel file and map columns to standard fields"""
-    output_path = parse_excel(
+    """Parse an Excel file and map columns to standard fields, organized by state"""
+    state_files = parse_excel(
         workspace_name=request.workspace_name,
         file_path=request.file_path,
         column_mapping=request.column_mapping
     )
+    
+    # Create summary message
+    states_list = ', '.join(state_files.keys())
+    first_state_path = str(next(iter(state_files.values())))
+    
     return ParseExcelResponse(
-        output_path=str(output_path),
-        message=f"Excel file parsed successfully. Output saved to {output_path}"
+        output_path=first_state_path,  # Return first state's path for backward compatibility
+        message=f"Excel file parsed successfully. Sites organized by state: {states_list}. "
+                f"Files saved to data/workspace/{request.workspace_name}/input/{{STATE}}/addresses.csv"
     )
 
 
 @app.post("/geocode", response_model=GeocodeResponse)
 def geocode_addresses(request: GeocodeRequest):
-    """Geocode addresses from workspace's addresses.csv file"""
+    """Geocode addresses from workspace's state-specific addresses.csv file"""
     import pandas as pd
-    output_path = geocode(workspace_name=request.workspace_name)
+    output_path = geocode(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
     
     # Count how many addresses were geocoded
     df = pd.read_csv(output_path)
@@ -121,7 +131,7 @@ def geocode_addresses(request: GeocodeRequest):
     
     return GeocodeResponse(
         output_path=str(output_path),
-        message=f"Geocoding completed. Results saved to {output_path}",
+        message=f"Geocoding completed for state '{request.state_abbr}'. Results saved to {output_path}",
         addresses_geocoded=addresses_count
     )
 
@@ -130,7 +140,7 @@ def geocode_addresses(request: GeocodeRequest):
 def cluster_sites(request: ClusterRequest):
     """Cluster geocoded sites based on geographic coordinates"""
     import pandas as pd
-    output_path = cluster(workspace_name=request.workspace_name)
+    output_path = cluster(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
     
     # Get cluster statistics
     df = pd.read_csv(output_path)
@@ -139,7 +149,7 @@ def cluster_sites(request: ClusterRequest):
     
     return ClusterResponse(
         output_path=str(output_path),
-        message=f"Clustering completed. {sites_count} sites assigned to {num_clusters} clusters",
+        message=f"Clustering completed for state '{request.state_abbr}'. {sites_count} sites assigned to {num_clusters} clusters",
         sites_clustered=sites_count,
         num_clusters=num_clusters
     )

@@ -60,6 +60,7 @@ Craw, Walk, Run – Ramp Phase approach
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
         -d '{
+            "state_abbr": "LA",
         "workspace_name": "foo"
     }'
 ```
@@ -72,6 +73,7 @@ Craw, Walk, Run – Ramp Phase approach
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
         -d '{
+            "state_abbr": "LA",
         "workspace_name": "foo"
     }'
 ```
@@ -84,12 +86,13 @@ Craw, Walk, Run – Ramp Phase approach
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
-    "workspace": "foobar",
-    "state_abbr": "NC",
-    "team_config": {
-        "teams": 2,
-        "workday": {
-        "start": "09:00:00",
+        "workspace": "foo",
+        "use_clusters": true,
+        "state_abbr": "LA",
+        "team_config": {
+            "teams": 2,
+            "workday": {
+            "start": "09:00:00",
         "end": "17:00:00"
         }
     },
