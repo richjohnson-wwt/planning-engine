@@ -1,7 +1,65 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from .models import PlanRequest, PlanResult, TeamDay, Site
+
+
+def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
+    """
+    Load sites from workspace's geocoded.csv file.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: Optional state abbreviation to filter sites (e.g., "LA", "NC")
+        
+    Returns:
+        List of Site objects
+        
+    Raises:
+        FileNotFoundError: If workspace or geocoded.csv doesn't exist
+    """
+    import pandas as pd
+    
+    # Validate workspace exists
+    workspace_path = Path("data") / "workspace" / workspace_name
+    if not workspace_path.exists():
+        raise FileNotFoundError(
+            f"Workspace '{workspace_name}' does not exist. "
+            f"Create it first using new_workspace('{workspace_name}')"
+        )
+    
+    # Check if geocoded.csv exists
+    geocoded_csv = workspace_path / "cache" / "geocoded.csv"
+    if not geocoded_csv.exists():
+        raise FileNotFoundError(
+            f"geocoded.csv not found in workspace '{workspace_name}'. "
+            f"Run geocode() first to create geocoded.csv"
+        )
+    
+    # Read geocoded data
+    df = pd.read_csv(geocoded_csv)
+    
+    # Filter by state if provided
+    if state_abbr:
+        df = df[df['state'] == state_abbr.upper()]
+        if len(df) == 0:
+            raise ValueError(
+                f"No sites found for state '{state_abbr}' in workspace '{workspace_name}'"
+            )
+    
+    # Convert to Site objects
+    sites = []
+    for _, row in df.iterrows():
+        site = Site(
+            id=str(row['site_id']),
+            name=f"{row['city']} - {row['street1']}",
+            lat=float(row['lat']),
+            lon=float(row['lon']),
+            service_minutes=60  # Default service time
+        )
+        sites.append(site)
+    
+    return sites
 
 
 def plan(request: PlanRequest) -> PlanResult:
@@ -10,7 +68,20 @@ def plan(request: PlanRequest) -> PlanResult:
     
     If OR-Tools specific fields (start_date, end_date) are provided, uses OR-Tools solver
     for optimized multi-day VRPTW routing. Otherwise, uses simple assignment.
+    
+    Sites can be provided explicitly or auto-loaded from geocoded.csv filtered by state_abbr.
     """
+    # Load sites from geocoded.csv if not provided
+    if request.sites is None:
+        request.sites = _load_sites_from_workspace(request.workspace, request.state_abbr)
+    
+    # Validate we have sites to plan
+    if not request.sites:
+        raise ValueError(
+            f"No sites found for workspace '{request.workspace}'"
+            + (f" with state '{request.state_abbr}'" if request.state_abbr else "")
+        )
+    
     # Check if OR-Tools solver should be used
     if request.start_date and request.end_date:
         return _plan_with_ortools(request)

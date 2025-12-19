@@ -38,12 +38,19 @@ class TeamDay(BaseModel):
 class PlanRequest(BaseModel):
     """Plan request model supporting both simple and advanced routing.
     
-    For basic usage: provide workspace, sites, and team_config.
+    For basic usage: provide workspace, sites (or state_abbr to auto-load), and team_config.
     For OR-Tools solver: also provide start_date, end_date, holidays, etc.
+    
+    Sites can be provided in two ways:
+    1. Explicitly via 'sites' field (for direct API calls)
+    2. Auto-loaded from geocoded.csv via 'state_abbr' (workspace must have geocoded.csv)
     """
     workspace: str
-    sites: List[Site]
+    sites: Optional[List[Site]] = None  # Optional: can be auto-loaded from geocoded.csv
     team_config: TeamConfig
+    
+    # Filtering options
+    state_abbr: Optional[str] = None  # Filter sites by state abbreviation (e.g., "LA", "NC")
     
     # OR-Tools solver specific fields
     start_date: Optional[date] = None
