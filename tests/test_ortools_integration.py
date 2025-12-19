@@ -25,7 +25,7 @@ def test_plan_with_ortools_simple():
         start_date=date(2025, 1, 1),
         end_date=date(2025, 1, 2),
         num_crews_available=2,
-        daily_work_minutes=480,
+        max_route_minutes=480,
         holidays=[],
         max_sites_per_crew_per_day=5,
     )

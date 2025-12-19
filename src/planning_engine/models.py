@@ -27,7 +27,13 @@ class TeamConfig(BaseModel):
 class TeamDay(BaseModel):
     team_id: int
     site_ids: List[str]
-    total_minutes: int
+
+    # Pure labor time
+    service_minutes: int
+
+    # Actual route consumption (travel + service + slack)
+    route_minutes: int
+
 
 class PlanRequest(BaseModel):
     """Plan request model supporting both simple and advanced routing.
@@ -43,7 +49,7 @@ class PlanRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     num_crews_available: Optional[int] = None  # If not provided, uses team_config.teams
-    daily_work_minutes: int = 480  # 8 hours default
+    max_route_minutes: int = 480  # 8 hours default
     break_minutes: int = 30
     holidays: List[date] = Field(default_factory=list)
     max_sites_per_crew_per_day: int = 8
@@ -57,3 +63,4 @@ class PlanRequest(BaseModel):
 
 class PlanResult(BaseModel):
     team_days: List[TeamDay]
+    unassigned: int = 0  # number of sites not scheduled

@@ -16,11 +16,13 @@ def plan(request: PlanRequest) -> PlanResult:
         return _plan_with_ortools(request)
     else:
         # Simple fallback: assign all sites to team 1
+        total_service = sum(s.service_minutes for s in request.sites)
         team_days = [
             TeamDay(
                 team_id=1,
                 site_ids=[s.id for s in request.sites],
-                total_minutes=sum(s.service_minutes for s in request.sites),
+                service_minutes=total_service,
+                route_minutes=total_service,  # No travel time in simple mode
             )
         ]
         return PlanResult(team_days=team_days)
@@ -28,89 +30,9 @@ def plan(request: PlanRequest) -> PlanResult:
 
 def _plan_with_ortools(request: PlanRequest) -> PlanResult:
     """Use OR-Tools solver for optimized routing."""
-    from .ortools_solver import solve_vrptw
-    from math import radians, sin, cos, sqrt, atan2
+    from .ortools_solver import plan_routes
     
-    # Assign indices to sites for OR-Tools
-    sites = request.sites
-    for idx, site in enumerate(sites):
-        site.index = idx
-    
-    # Calculate distance matrix using Haversine formula
-    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate distance in kilometers between two lat/lon points."""
-        R = 6371  # Earth's radius in kilometers
-        
-        lat1_rad, lon1_rad = radians(lat1), radians(lon1)
-        lat2_rad, lon2_rad = radians(lat2), radians(lon2)
-        
-        dlat = lat2_rad - lat1_rad
-        dlon = lon2_rad - lon1_rad
-        
-        a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
-        c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        
-        return R * c
-    
-    # Build distance matrix in minutes (assuming 60 km/h average speed)
-    n = len(sites)
-    distance_matrix_minutes = []
-    avg_speed_kmh = 60.0
-    
-    for i in range(n):
-        row = []
-        for j in range(n):
-            if i == j:
-                row.append(0)
-            else:
-                dist_km = haversine_distance(
-                    sites[i].lat, sites[i].lon,
-                    sites[j].lat, sites[j].lon
-                )
-                travel_minutes = int((dist_km / avg_speed_kmh) * 60)
-                row.append(travel_minutes)
-        distance_matrix_minutes.append(row)
-    
-    # Call OR-Tools solver
-    solution = solve_vrptw(
-        sites=sites,
-        request=request,
-        distance_matrix_minutes=distance_matrix_minutes
-    )
-    
-    if not solution:
-        raise RuntimeError("OR-Tools solver could not find a solution")
-    
-    # Convert OR-Tools solution to PlanResult format
-    team_days = []
-    for route in solution["routes"]:
-        crew_id = route["crew_id"]
-        visits = route["visits"]
-        
-        # Group visits by day
-        day_groups = {}
-        for visit in visits:
-            arrival_datetime = visit["arrival"]
-            # Convert to date if it's a datetime, otherwise use as-is
-            day_key = arrival_datetime.date() if isinstance(arrival_datetime, datetime) else arrival_datetime
-            
-            if day_key not in day_groups:
-                day_groups[day_key] = []
-            
-            # Find site by name
-            site = next((s for s in sites if s.name == visit["site"]), None)
-            if site:
-                day_groups[day_key].append(site)
-        
-        # Create TeamDay for each day
-        for day, day_sites in day_groups.items():
-            team_days.append(TeamDay(
-                team_id=crew_id + 1,  # crew_id is 0-indexed, team_id is 1-indexed
-                site_ids=[s.id for s in day_sites],
-                total_minutes=sum(s.service_minutes for s in day_sites)
-            ))
-    
-    return PlanResult(team_days=team_days)
+    return plan_routes(request)
 
 
 def new_workspace(workspace_name: str) -> Path:

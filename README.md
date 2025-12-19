@@ -1,5 +1,24 @@
 
+# User request features
 
+Custom Parameters:
+Team Assignments – allocate routes based on number of teams
+Auto-calculate number of teams needed
+Or divide based on regions and/or number of sites
+Time Estimation – estimate time per site and total project duration
+Set Project Start/End Dates
+Define working hours per day
+Set number of sites per day per team
+Set the run rate across the regions that can be completed per each bridge/cut
+Set hours to complete each site; also by t shirt size
+Load in breaks; fire, holidays, blackout dates
+Can a region be completed before a break comes or push to start after the break
+Typical Weather patterns thought about; ie. outside work prob shouldn’t be done in MN during the winter; factor in starting Northern sites and work way south
+Routing –
+Team radius based on region – not to go over x amount of miles (avoidance of overnight travel)
+Craw, Walk, Run – Ramp Phase approach
+ 
+ 
 # Workflow
 
 1. Create workspace
