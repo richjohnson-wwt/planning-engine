@@ -36,14 +36,25 @@ class TeamDay(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    """Plan request model supporting both simple and advanced routing.
+    """Plan request model for single-day VRP optimization.
     
-    For basic usage: provide workspace, sites (or state_abbr to auto-load), and team_config.
-    For OR-Tools solver: also provide start_date, end_date, holidays, etc.
+    CURRENT IMPLEMENTATION (Single-Day VRP):
+    - Optimizes routes for ONE day only
+    - start_date: Used for timestamp reporting (e.g., "route for Jan 15, 2025")
+    - end_date: Reserved for future multi-day scheduling (currently not used)
+    - holidays: Reserved for future multi-day scheduling (currently not used)
+    
+    FUTURE FEATURES (Not Yet Implemented):
+    - Multi-day scheduling across date range (start_date to end_date)
+    - Exclude holidays and blackout dates from schedule
+    - Estimate total project duration
+    - See multi_day_scheduler.py for roadmap
     
     Sites can be provided in two ways:
     1. Explicitly via 'sites' field (for direct API calls)
     2. Auto-loaded from geocoded.csv via 'state_abbr' (workspace must have geocoded.csv)
+    
+    For cluster-based planning, set use_clusters=True to plan each geographic cluster separately.
     """
     workspace: str
     sites: Optional[List[Site]] = None  # Optional: can be auto-loaded from geocoded.csv

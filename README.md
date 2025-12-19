@@ -2,21 +2,22 @@
 # User request features
 
 Custom Parameters:
-Team Assignments – allocate routes based on number of teams
-Auto-calculate number of teams needed
-Or divide based on regions and/or number of sites
-Time Estimation – estimate time per site and total project duration
-Set Project Start/End Dates
-Define working hours per day
-Set number of sites per day per team
-Set the run rate across the regions that can be completed per each bridge/cut
-Set hours to complete each site; also by t shirt size
-Load in breaks; fire, holidays, blackout dates
-Can a region be completed before a break comes or push to start after the break
-Routing –
-Team radius based on region – not to go over x amount of miles (avoidance of overnight travel)
-Craw, Walk, Run – Ramp Phase approach
+* Team Assignments – allocate routes based on number of teams
+    * Auto-calculate number of teams needed
+    * Or divide based on regions and/or number of sites
+* Time Estimation – estimate time per site and total project duration
+    * Set Project Start/End Dates
+    * Define working hours per day
+    * Set number of sites per day per team
+    * Set the run rate across the regions that can be completed per each bridge/cut
+    * Set hours to complete each site; also by t shirt size
+    * Load in breaks; fire, holidays, blackout dates
+    * Can a region be completed before a break comes or push to start after the break
+* Routing –
+    * Team radius based on region – not to go over x amount of miles (avoidance of overnight travel)
+* Craw, Walk, Run – Ramp Phase approach
  
+
 
 # Workflow
 
@@ -106,3 +107,103 @@ Craw, Walk, Run – Ramp Phase approach
     "minimize_crews": true
     }'
 ```
+
+
+## Multi day notes 
+
+
+Mode 1: Fixed Crews → How Long Will It Take?
+request = PlanRequest(
+    workspace="foo",
+    state_abbr="LA",
+    sites=150_sites,
+    start_date=date(2025, 1, 1),    # Start when ready
+    end_date=None,                   # ❓ Calculate this!
+    num_crews_available=3,           # Fixed: only 3 crews
+    max_route_minutes=480,
+    service_minutes_per_site=60,
+    max_sites_per_crew_per_day=8
+)
+
+# Multi-day scheduler will:
+# 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
+# 2. Calculate days needed: 150 sites ÷ 24 = ~7 days
+# 3. Generate work days starting from start_date
+# 4. Call plan_single_day_vrp() for each of those 7 days
+# 5. Return: "Will take 7 work days with 3 crews"
+
+result = plan_multi_day_schedule(request)
+# Output: 21 team-days (7 days × 3 crews)
+
+
+#Mode 2: Fixed Dates → How Many Crews Needed?
+request = PlanRequest(
+    workspace="foo",
+    state_abbr="LA",
+    sites=150_sites,
+    start_date=date(2025, 1, 1),    # Must start Jan 1
+    end_date=date(2025, 1, 5),      # Must finish by Jan 5 (5 days)
+    num_crews_available=None,        # ❓ Calculate this!
+    max_route_minutes=480,
+    service_minutes_per_site=60,
+    max_sites_per_crew_per_day=8,
+    minimize_crews=True              # Find minimum crews needed
+)
+
+# Multi-day scheduler will:
+# 1. Calculate work days: 5 days (Jan 1-5)
+# 2. Calculate required capacity: 150 sites ÷ 5 days = 30 sites/day
+# 3. Calculate crews needed: 30 sites/day ÷ 8 sites/crew = 4 crews
+# 4. Call plan_single_day_vrp() for each day with 4 crews
+# 5. Return: "Need 4 crews to complete in 5 days"
+
+result = plan_multi_day_schedule(request)
+# Output: 20 team-days (5 days × 4 crews)
+
+
+
+#Mode 1: Fixed Crews → Calculate Duration
+# "I have 3 crews. How long will it take to complete 150 sites?"
+
+request = PlanRequest(
+    workspace="foo",
+    state_abbr="LA",
+    start_date=date(2025, 1, 1),     # Start date
+    end_date=None,                    # Will be calculated
+    num_crews_available=3,            # Fixed: 3 crews
+    max_sites_per_crew_per_day=8,
+    # ... other params
+)
+
+result = plan_multi_day_schedule(request)
+
+# Scheduler will:
+# 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
+# 2. Calculate days: 150 ÷ 24 = 7 days needed
+# 3. Generate 7 work days from start_date
+# 4. Call plan_single_day_vrp() for each day
+# 5. Return: "7 days with 3 crews = 21 team-days"
+
+
+#Mode 2: Fixed Dates → Calculate Crews
+# "I need to finish 150 sites by Jan 5. How many crews do I need?"
+
+request = PlanRequest(
+    workspace="foo",
+    state_abbr="LA",
+    start_date=date(2025, 1, 1),     # Must start Jan 1
+    end_date=date(2025, 1, 5),       # Must finish Jan 5 (5 days)
+    num_crews_available=None,         # Will be calculated
+    minimize_crews=True,              # Find minimum needed
+    max_sites_per_crew_per_day=8,
+    # ... other params
+)
+
+result = plan_multi_day_schedule(request)
+
+# Scheduler will:
+# 1. Calculate work days: 5 days
+# 2. Calculate required: 150 ÷ 5 = 30 sites/day
+# 3. Calculate crews: 30 ÷ 8 = 4 crews needed
+# 4. Call plan_single_day_vrp() for each day with 4 crews
+# 5. Return: "4 crews for 5 days = 20 team-days"
