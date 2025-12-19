@@ -220,16 +220,26 @@ def main():
     
     output_lines.extend(summary_lines)
     
-    # Write to output file
+    # Write outputs to workspace output directory
     from pathlib import Path
+    import json
     output_dir = Path("data") / "workspace" / WORKSPACE_NAME / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / "route_plan.txt"
     
-    with open(output_file, 'w') as f:
+    # Save human-readable text output
+    output_file_txt = output_dir / "route_plan.txt"
+    with open(output_file_txt, 'w') as f:
         f.write('\n'.join(output_lines))
     
-    print(f"\n✓ Results saved to: {output_file}")
+    # Save complete JSON output with all data
+    output_file_json = output_dir / "route_plan.json"
+    result_dict = result.model_dump()  # Convert Pydantic model to dict
+    with open(output_file_json, 'w') as f:
+        json.dump(result_dict, f, indent=2)
+    
+    print(f"\n✓ Results saved to:")
+    print(f"  - Text summary: {output_file_txt}")
+    print(f"  - Complete JSON: {output_file_json}")
 
 if __name__ == "__main__":
     main()

@@ -157,4 +157,53 @@ def cluster_sites(request: ClusterRequest):
 
 @app.post("/plan", response_model=PlanResult)
 def run_plan(request: PlanRequest):
-    return plan(request)
+    """
+    Plan routes for teams/crews to visit sites.
+    
+    Results are automatically saved to the workspace output folder organized by state:
+    - data/workspace/{workspace}/output/{STATE}/route_plan_{timestamp}.json
+    
+    JSON includes metadata wrapper with request parameters and planning results.
+    """
+    from pathlib import Path
+    import json
+    from datetime import datetime
+    
+    # Run the planning
+    result = plan(request)
+    
+    # Save results to workspace output folder organized by state
+    if request.workspace and request.state_abbr:
+        # Create state-specific output directory (matching cache structure)
+        output_dir = Path("data") / "workspace" / request.workspace / "output" / request.state_abbr
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Add timestamp to filename for versioning
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Build metadata wrapper with request parameters
+        output_data = {
+            "metadata": {
+                "workspace": request.workspace,
+                "state_abbr": request.state_abbr,
+                "timestamp": datetime.now().isoformat(),
+                "use_clusters": request.use_clusters,
+                "start_date": request.start_date.isoformat() if request.start_date else None,
+                "end_date": request.end_date.isoformat() if request.end_date else None,
+                "num_crews_available": request.num_crews_available,
+                "max_route_minutes": request.max_route_minutes,
+                "service_minutes_per_site": request.service_minutes_per_site,
+                "minimize_crews": request.minimize_crews,
+                "max_sites_per_crew_per_day": request.max_sites_per_crew_per_day
+            },
+            "result": result.model_dump()
+        }
+        
+        # Save complete JSON output with metadata
+        json_file = output_dir / f"route_plan_{timestamp}.json"
+        with open(json_file, 'w') as f:
+            json.dump(output_data, f, indent=2)
+        
+        print(f"✓ Results saved to: {json_file}")
+    
+    return result
