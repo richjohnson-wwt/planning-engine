@@ -183,3 +183,56 @@ def geocode(workspace_name: str) -> Path:
     print(f"✓ Geocoded addresses saved to: {output_path}")
     
     return output_path
+
+
+def cluster(workspace_name: str) -> Path:
+    """
+    Cluster geocoded sites based on their geographic coordinates.
+    
+    Uses automatic k-means clustering with optimal cluster count determined
+    by silhouette score analysis. Reads from cache/geocoded.csv and saves
+    results to cache/clustered.csv.
+    
+    Args:
+        workspace_name: Name of the workspace containing geocoded.csv
+        
+    Returns:
+        Path to the created clustered.csv file
+        
+    Raises:
+        FileNotFoundError: If workspace or geocoded.csv doesn't exist
+        ValueError: If geocoded.csv has invalid data
+    """
+    import pandas as pd
+    from .data_prep.cluster import cluster_sites
+    
+    # Validate workspace exists
+    workspace_path = Path("data") / "workspace" / workspace_name
+    if not workspace_path.exists():
+        raise FileNotFoundError(
+            f"Workspace '{workspace_name}' does not exist. "
+            f"Create it first using new_workspace('{workspace_name}')"
+        )
+    
+    # Check if geocoded.csv exists
+    geocoded_csv = workspace_path / "cache" / "geocoded.csv"
+    if not geocoded_csv.exists():
+        raise FileNotFoundError(
+            f"geocoded.csv not found in workspace '{workspace_name}'. "
+            f"Run geocode() first to create geocoded.csv"
+        )
+    
+    # Read geocoded data
+    df = pd.read_csv(geocoded_csv)
+    print(f"Clustering {len(df)} sites from {geocoded_csv}...")
+    
+    # Perform clustering
+    df_clustered = cluster_sites(df)
+    
+    # Save to cache directory
+    output_path = workspace_path / "cache" / "clustered.csv"
+    df_clustered.to_csv(output_path, index=False)
+    
+    print(f"✓ Clustered sites saved to: {output_path}")
+    
+    return output_path

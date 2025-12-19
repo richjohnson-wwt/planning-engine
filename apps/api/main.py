@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from planning_engine import plan, new_workspace, parse_excel, geocode
+from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
 from planning_engine.models import PlanRequest, PlanResult
 from pydantic import BaseModel
 
@@ -64,6 +64,27 @@ class GeocodeResponse(BaseModel):
     addresses_geocoded: int
 
 
+class ClusterRequest(BaseModel):
+    workspace_name: str
+    
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "workspace_name": "my_project_2025"
+                }
+            ]
+        }
+    }
+
+
+class ClusterResponse(BaseModel):
+    output_path: str
+    message: str
+    sites_clustered: int
+    num_clusters: int
+
+
 @app.post("/workspace", response_model=WorkspaceResponse)
 def create_workspace(request: WorkspaceRequest):
     """Create a new workspace for organizing planning workflows"""
@@ -102,6 +123,25 @@ def geocode_addresses(request: GeocodeRequest):
         output_path=str(output_path),
         message=f"Geocoding completed. Results saved to {output_path}",
         addresses_geocoded=addresses_count
+    )
+
+
+@app.post("/cluster", response_model=ClusterResponse)
+def cluster_sites(request: ClusterRequest):
+    """Cluster geocoded sites based on geographic coordinates"""
+    import pandas as pd
+    output_path = cluster(workspace_name=request.workspace_name)
+    
+    # Get cluster statistics
+    df = pd.read_csv(output_path)
+    sites_count = len(df)
+    num_clusters = len(df[df['cluster_id'] >= 0]['cluster_id'].unique())
+    
+    return ClusterResponse(
+        output_path=str(output_path),
+        message=f"Clustering completed. {sites_count} sites assigned to {num_clusters} clusters",
+        sites_clustered=sites_count,
+        num_clusters=num_clusters
     )
 
 
