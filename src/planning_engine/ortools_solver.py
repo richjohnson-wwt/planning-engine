@@ -11,7 +11,18 @@ from .models import Site, PlanRequest, PlanResult, TeamDay
 
 DEPOT_INDEX = 0  # synthetic depot index
 
-def plan_routes(request: PlanRequest) -> PlanResult:
+def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
+    """Plan single-day vehicle routes using OR-Tools VRP solver.
+    
+    Optimizes routes for one day given a set of sites and crew constraints.
+    Does NOT schedule across multiple days - each call optimizes one day.
+    
+    Args:
+        request: Planning request with sites, crew config, and constraints
+        
+    Returns:
+        PlanResult with optimized routes for one day
+    """
     # Create synthetic depot at centroid of real sites
     if request.sites:
         avg_lat = sum(s.lat for s in request.sites) / len(request.sites)
@@ -38,7 +49,7 @@ def plan_routes(request: PlanRequest) -> PlanResult:
 
     distance_matrix_minutes = _calculate_distance_matrix(sites)
 
-    solution = solve_vrptw(sites, request, distance_matrix_minutes)
+    solution = solve_single_day_vrptw(sites, request, distance_matrix_minutes)
 
     if not solution:
         return PlanResult(team_days=[], unassigned=len(request.sites))
@@ -123,7 +134,19 @@ def _create_data_model(sites: List[Site], travel_time_matrix: List[List[int]]) -
     }
 
 
-def solve_vrptw(sites: List[Site], request: PlanRequest, distance_matrix_minutes: List[List[int]]) -> Optional[dict]:
+def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_matrix_minutes: List[List[int]]) -> Optional[dict]:
+    """Solve single-day Vehicle Routing Problem with Time Windows using OR-Tools.
+    
+    This is a single-day optimizer - it does not schedule across multiple days.
+    
+    Args:
+        sites: List of sites including synthetic depot at index 0
+        request: Planning request with constraints
+        distance_matrix_minutes: Travel time matrix including service times
+        
+    Returns:
+        Solution dict with routes, or None if no solution found
+    """
     if len(sites) < 2:
         return {
             "routes": [{

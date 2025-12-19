@@ -24,8 +24,8 @@ def test_parse_excel_without_street2(tmp_path):
         # Create workspace
         new_workspace(workspace_name)
         
-        # Parse Excel file WITHOUT street2 in mapping
-        output_path = parse_excel(
+        # Parse Excel file WITHOUT street2 in mapping (returns dict of state -> path)
+        state_files = parse_excel(
             workspace_name=workspace_name,
             file_path=str(excel_file),
             column_mapping={
@@ -38,7 +38,9 @@ def test_parse_excel_without_street2(tmp_path):
             }
         )
         
-        # Verify output file exists
+        # Verify output file exists for MO state
+        assert 'MO' in state_files
+        output_path = state_files['MO']
         assert output_path.exists()
         
         # Verify CSV content has only the mapped columns (no street2)
@@ -74,8 +76,8 @@ def test_parse_excel_with_street2(tmp_path):
         # Create workspace
         new_workspace(workspace_name)
         
-        # Parse Excel file WITH street2 in mapping
-        output_path = parse_excel(
+        # Parse Excel file WITH street2 in mapping (returns dict of state -> path)
+        state_files = parse_excel(
             workspace_name=workspace_name,
             file_path=str(excel_file),
             column_mapping={
@@ -88,7 +90,9 @@ def test_parse_excel_with_street2(tmp_path):
             }
         )
         
-        # Verify output file exists
+        # Verify output file exists for MO state
+        assert 'MO' in state_files
+        output_path = state_files['MO']
         assert output_path.exists()
         
         # Verify CSV content includes street2

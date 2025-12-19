@@ -200,10 +200,10 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
 
 
 def _plan_with_ortools(request: PlanRequest) -> PlanResult:
-    """Use OR-Tools solver for optimized routing."""
-    from .ortools_solver import plan_routes
+    """Use OR-Tools single-day VRP solver for optimized routing."""
+    from .ortools_solver import plan_single_day_vrp
     
-    return plan_routes(request)
+    return plan_single_day_vrp(request)
 
 
 def new_workspace(workspace_name: str) -> Path:

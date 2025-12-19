@@ -104,14 +104,16 @@ def test_parse_excel_overwrites_existing(tmp_path):
         # Create workspace
         new_workspace(workspace_name)
         
-        # Parse first file
-        output_path1 = parse_excel(workspace_name, str(excel_file1), column_mapping)
-        result1 = pd.read_csv(output_path1)
+        # Parse first file (returns dict of state -> path)
+        state_files1 = parse_excel(workspace_name, str(excel_file1), column_mapping)
+        assert 'MO' in state_files1
+        result1 = pd.read_csv(state_files1['MO'])
         assert len(result1) == 1
         
         # Parse second file (should overwrite)
-        output_path2 = parse_excel(workspace_name, str(excel_file2), column_mapping)
-        result2 = pd.read_csv(output_path2)
+        state_files2 = parse_excel(workspace_name, str(excel_file2), column_mapping)
+        assert 'MO' in state_files2
+        result2 = pd.read_csv(state_files2['MO'])
         assert len(result2) == 2
         assert result2['site_id'].tolist() == ['B', 'C']
         

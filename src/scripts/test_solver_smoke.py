@@ -1,7 +1,7 @@
 # src/scripts/test_solver_smoke.py
 from datetime import time
 from planning_engine.models import Site, TeamConfig, Workday, PlanRequest
-from planning_engine.ortools_solver import plan_routes
+from planning_engine.ortools_solver import plan_single_day_vrp
 
 def main():
     # --- 1. Small, deterministic dataset ---
@@ -24,7 +24,7 @@ def main():
     )
 
     # --- 4. Plan routes ---
-    result = plan_routes(request)
+    result = plan_single_day_vrp(request)
 
     # --- 5. Check for duplicates ---
     site_counts = {}

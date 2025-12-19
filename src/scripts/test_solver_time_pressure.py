@@ -1,13 +1,11 @@
 from datetime import date, time
 from planning_engine.models import Site, Workday, TeamConfig, PlanRequest
-from planning_engine.ortools_solver import plan_routes
+from planning_engine.ortools_solver import plan_single_day_vrp
 
 # This will immediately surface:
 
 # Over-scheduling
-
 # Bad time math
-
 # Routes ignoring daily limits
 
 def main():
@@ -39,7 +37,7 @@ def main():
         service_minutes_per_site=90,
     )
 
-    result = plan_routes(request)
+    result = plan_single_day_vrp(request)
 
     total_sites = sum(len(td.site_ids) for td in result.team_days)
 

@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta, time
 from planning_engine.models import Site, PlanRequest, TeamConfig, Workday
-from planning_engine.ortools_solver import plan_routes
+from planning_engine.ortools_solver import plan_single_day_vrp
 
 def make_sites(num_sites: int):
     """Generate synthetic sites in a city grid for testing."""
@@ -25,27 +25,30 @@ def print_team_days(result):
     print(f"Unassigned sites: {result.unassigned}")
 
 def fixed_crews_test():
-    """Fixed number of crews → show partial scheduling if needed."""
-    sites = make_sites(50)  # tight schedule to force unassigned
+    """Fixed number of crews → show single-day capacity with crew constraint."""
+    sites = make_sites(50)
+    
+    # Single-day optimization: What can 3 crews accomplish in 1 day?
     request = PlanRequest(
         workspace="test",
         sites=sites,
         team_config=TeamConfig(teams=3, workday=Workday(start=time(9,0), end=time(17,0))),
-        num_crews_available=3,  # cap vehicles
-        max_route_minutes=480
+        num_crews_available=3,  # Fixed: only 3 crews available
+        max_route_minutes=480,
+        minimize_crews=False  # Use all available crews
     )
 
-    try:
-        result = plan_routes(request)
-    except RuntimeError:
-        # Return empty plan if no solution, partial assignment will be reported in 'unassigned'
-        result = type("EmptyResult", (), {})()
-        result.team_days = []
-        result.unassigned = len(sites)
+    result = plan_single_day_vrp(request)
 
-    print("\n=== FIXED CREWS MODE ===")
+    print("\n=== FIXED CREWS MODE (Single-Day VRP) ===")
     scheduled = sum(len(td.site_ids) for td in result.team_days)
-    print(f"Scheduled {scheduled}/{len(sites)} sites")
+    print(f"Scheduled {scheduled}/{len(sites)} sites in 1 day with 3 crews")
+    
+    # Calculate how many days would be needed to complete all sites
+    if scheduled > 0:
+        days_needed = (len(sites) + scheduled - 1) // scheduled  # Ceiling division
+        print(f"Estimated days to complete all {len(sites)} sites: ~{days_needed} days")
+    
     print_team_days(result)
 
 def fixed_dates_test():
@@ -63,7 +66,7 @@ def fixed_dates_test():
         minimize_crews=True
     )
 
-    result = plan_routes(request)
+    result = plan_single_day_vrp(request)
 
     print("\n=== FIXED DATES MODE ===")
     scheduled = sum(len(td.site_ids) for td in result.team_days)
