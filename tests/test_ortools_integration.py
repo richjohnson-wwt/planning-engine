@@ -27,7 +27,7 @@ def test_plan_with_ortools_simple():
         num_crews_available=2,
         max_route_minutes=480,
         holidays=[],
-        max_sites_per_crew_per_day=5,
+        fast_mode=True
     )
 
     # WHEN: We run the planning engine
@@ -62,7 +62,8 @@ def test_plan_without_ortools_fallback():
     req = PlanRequest(
         workspace="test_workspace",
         sites=sites,
-        team_config=team_config
+        team_config=team_config,
+        fast_mode=True
     )
 
     # WHEN: We run the planning engine

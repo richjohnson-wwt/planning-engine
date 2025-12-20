@@ -37,7 +37,8 @@ print("Step 3: Geocoding addresses...")
 print("="*60)
 
 try:
-    geocoded_csv = geocode(workspace_name=workspace_name)
+    state_abbr='LA'
+    geocoded_csv = geocode(workspace_name=workspace_name, state_abbr=state_abbr)
     print(f"\n✓ Geocoding complete: {geocoded_csv}")
     
     # Show geocoded results
@@ -49,7 +50,7 @@ try:
     print("Step 4: Clustering sites...")
     print("="*60)
     
-    clustered_csv = cluster(workspace_name=workspace_name)
+    clustered_csv = cluster(workspace_name=workspace_name, state_abbr=state_abbr)
     print(f"\n✓ Clustering complete: {clustered_csv}")
     
     # Show clustering results

@@ -103,8 +103,6 @@ Custom Parameters:
     "max_route_minutes": 480,
     "service_minutes_per_site": 60,
     "holidays": [],
-    "max_sites_per_crew_per_day": 8,
-    "minimize_crews": true
     }'
 ```
 
@@ -122,7 +120,6 @@ request = PlanRequest(
     num_crews_available=3,           # Fixed: only 3 crews
     max_route_minutes=480,
     service_minutes_per_site=60,
-    max_sites_per_crew_per_day=8
 )
 
 # Multi-day scheduler will:
@@ -146,8 +143,6 @@ request = PlanRequest(
     num_crews_available=None,        # ❓ Calculate this!
     max_route_minutes=480,
     service_minutes_per_site=60,
-    max_sites_per_crew_per_day=8,
-    minimize_crews=True              # Find minimum crews needed
 )
 
 # Multi-day scheduler will:
@@ -171,7 +166,6 @@ request = PlanRequest(
     start_date=date(2025, 1, 1),     # Start date
     end_date=None,                    # Will be calculated
     num_crews_available=3,            # Fixed: 3 crews
-    max_sites_per_crew_per_day=8,
     # ... other params
 )
 
@@ -195,7 +189,6 @@ request = PlanRequest(
     end_date=date(2025, 1, 5),       # Must finish Jan 5 (5 days)
     num_crews_available=None,         # Will be calculated
     minimize_crews=True,              # Find minimum needed
-    max_sites_per_crew_per_day=8,
     # ... other params
 )
 

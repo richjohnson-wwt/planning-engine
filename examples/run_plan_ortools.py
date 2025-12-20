@@ -23,6 +23,7 @@ team_config = TeamConfig(
 request = PlanRequest(
     workspace="example_workspace",
     sites=sites,
+    state_abbr='LA',
     team_config=team_config,
     # OR-Tools specific fields
     start_date=date(2025, 1, 6),  # Monday
@@ -31,8 +32,7 @@ request = PlanRequest(
     max_route_minutes=480,  # 8 hours
     break_minutes=30,
     holidays=[],  # No holidays in this period
-    max_sites_per_crew_per_day=3,
-    minimize_crews=True,  # Try to use fewer crews if possible
+    fast_mode=True
 )
 
 # Step 4: Call the planning engine (will use OR-Tools solver)
@@ -55,7 +55,7 @@ for team_id in sorted(team_schedule.keys()):
     print(f"Team/Crew {team_id}:")
     for idx, td in enumerate(team_schedule[team_id], 1):
         site_names = [s.name for s in sites if s.id in td.site_ids]
-        print(f"  Day {idx}: {', '.join(site_names)} ({td.total_minutes} minutes)")
+        print(f"  Day {idx}: {', '.join(site_names)} ({td.route_minutes} minutes)")
     print()
 
 # Summary

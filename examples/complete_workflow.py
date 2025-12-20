@@ -116,8 +116,6 @@ def main():
                 max_route_minutes=480,  # 8 hours
                 break_minutes=30,
                 holidays=[],
-                max_sites_per_crew_per_day=5,
-                minimize_crews=True,
             )
             
             # Run planning for this cluster

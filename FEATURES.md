@@ -30,11 +30,6 @@ This document tracks the implementation status of user-requested features.
   - File: `models.py`
   - Example: `Workday(start=time(9,0), end=time(17,0))` = 8-hour workday
 
-- ✅ **Set number of sites per day per team**
-  - Implementation: `max_sites_per_crew_per_day` parameter
-  - File: `models.py`
-  - Default: 8 sites per crew per day
-
 ### Routing
 - ✅ **Team radius based on region**
   - Implementation: Cluster-based planning keeps routes within geographic boundaries

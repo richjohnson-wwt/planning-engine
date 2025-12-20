@@ -35,6 +35,7 @@ def main():
         num_crews_available=2,  # Hard limit: only 2 crews available
         max_route_minutes=360,  # 6 hours
         service_minutes_per_site=90,
+        fast_mode=True
     )
 
     result = plan_single_day_vrp(request)

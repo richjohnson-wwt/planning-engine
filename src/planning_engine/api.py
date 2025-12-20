@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime, timedelta
-from .models import PlanRequest, PlanResult, TeamDay, Site
+from .models import PlanRequest, PlanResult, TeamDay, Site, CalendarPlanResult
+from .calendar_wrapper import plan_fixed_calendar, plan_fixed_crews
 
 
 def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
@@ -87,11 +87,17 @@ def plan(request: PlanRequest) -> PlanResult:
             + (f" with state '{request.state_abbr}'" if request.state_abbr else "")
         )
     
-    # Check if OR-Tools solver should be used
+    # Check if calendar-based planning should be used
     if request.start_date and request.end_date:
-        return _plan_with_ortools(request)
+        # Fixed calendar mode: optimize crews for date range
+        calendar_result = plan_fixed_calendar(request)
+        return calendar_result.to_plan_result()
+    elif request.num_crews_available is not None:
+        # Fixed crews mode: optimize days for given crews
+        calendar_result = plan_fixed_crews(request)
+        return calendar_result.to_plan_result()
     else:
-        # Simple fallback: assign all sites to team 1
+        # Simple fallback: assign all sites to team 1 (no optimization)
         total_service = sum(s.service_minutes for s in request.sites)
         team_days = [
             TeamDay(
@@ -178,13 +184,17 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
             max_route_minutes=request.max_route_minutes,
             break_minutes=request.break_minutes,
             holidays=request.holidays,
-            max_sites_per_crew_per_day=request.max_sites_per_crew_per_day,
             service_minutes_per_site=request.service_minutes_per_site,
             minimize_crews=request.minimize_crews
         )
         
-        # Plan this cluster
-        cluster_result = _plan_with_ortools(cluster_request)
+        # Plan this cluster using calendar-based multi-day planning
+        if cluster_request.start_date and cluster_request.end_date:
+            cluster_calendar_result = plan_fixed_calendar(cluster_request)
+            cluster_result = cluster_calendar_result.to_plan_result()
+        else:
+            cluster_calendar_result = plan_fixed_crews(cluster_request)
+            cluster_result = cluster_calendar_result.to_plan_result()
         
         # Adjust team IDs to be unique across clusters
         # Cluster 0: teams 1-9, Cluster 1: teams 10-19, etc.
