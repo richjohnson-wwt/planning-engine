@@ -110,6 +110,8 @@ Custom Parameters:
 
 
 Mode 1: Fixed Crews → How Long Will It Take?
+
+```
 request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
@@ -120,6 +122,7 @@ request = PlanRequest(
     max_route_minutes=480,
     service_minutes_per_site=60,
 )
+```
 
 ### Multi-day scheduler will:
  1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
@@ -129,10 +132,12 @@ request = PlanRequest(
  5. Return: "Will take 7 work days with 3 crews"
 
 result = plan_multi_day_schedule(request)
-# Output: 21 team-days (7 days × 3 crews)
+Output: 21 team-days (7 days × 3 crews)
 
 
 ### Mode 2: Fixed Dates → How Many Crews Needed?
+
+```
 request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
@@ -143,6 +148,7 @@ request = PlanRequest(
     max_route_minutes=480,
     service_minutes_per_site=60,
 )
+```
 
 ### Multi-day scheduler will:
  1. Calculate work days: 5 days (Jan 1-31)
@@ -159,6 +165,7 @@ Output: 20 team-days (5 days × 4 crews)
 ### Mode 1: Fixed Crews → Calculate Duration
 "I have 3 crews. How long will it take to complete 150 sites?"
 
+```
 request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
@@ -167,6 +174,7 @@ request = PlanRequest(
     team_config=TeamConfig(teams=3, workday=...),  # Fixed: only 3 crews
     # ... other params
 )
+```
 
 result = plan_multi_day_schedule(request)
 
@@ -181,6 +189,7 @@ Scheduler will:
 ### Mode 2: Fixed Dates → Calculate Crews
 "I need to finish 150 sites by Jan 5. How many crews do I need?"
 
+```
 request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
@@ -189,6 +198,7 @@ request = PlanRequest(
     # team_config.teams will be calculated automatically
     # ... other params
 )
+```
 
 result = plan_multi_day_schedule(request)
 
