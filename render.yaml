@@ -1,0 +1,33 @@
+services:
+  # FastAPI Backend Service
+  - type: web
+    name: planning-engine-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -e . && pip install uvicorn
+    startCommand: uvicorn apps.api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: PORT
+        generateValue: true
+    healthCheckPath: /docs
+    autoDeploy: true
+
+  # Vue.js Frontend Service (Static Site)
+  - type: web
+    name: planning-engine-web
+    runtime: static
+    plan: free
+    buildCommand: cd apps/web && npm install && npm run build
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: VITE_API_URL
+        value: https://planning-engine-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true
