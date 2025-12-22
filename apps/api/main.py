@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
 from planning_engine.models import PlanRequest, PlanResult
 from pydantic import BaseModel
+import warnings
+
+# Suppress Pydantic serialization warnings for optional date fields
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.type_adapter")
 
 app = FastAPI(title="Planning Engine API")
 
@@ -190,13 +194,11 @@ def run_plan(request: PlanRequest):
                 "use_clusters": request.use_clusters,
                 "start_date": request.start_date.isoformat() if request.start_date else None,
                 "end_date": request.end_date.isoformat() if request.end_date else None,
-                "num_crews_available": request.num_crews_available,
+                "teams": request.team_config.teams,
                 "max_route_minutes": request.max_route_minutes,
-                "service_minutes_per_site": request.service_minutes_per_site,
-                "minimize_crews": request.minimize_crews,
-                "max_sites_per_crew_per_day": request.max_sites_per_crew_per_day
+                "service_minutes_per_site": request.service_minutes_per_site
             },
-            "result": result.model_dump()
+            "result": result.model_dump(mode='json', warnings=False)
         }
         
         # Save complete JSON output with metadata

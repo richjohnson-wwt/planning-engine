@@ -8,6 +8,7 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
 from .models import Site, PlanRequest, PlanResult, TeamDay
+from ._internal.utils import calculate_distance_matrix
 
 DEPOT_INDEX = 0  # synthetic depot index
 
@@ -47,7 +48,7 @@ def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
         site.index = idx
         assert site.index is not None
 
-    distance_matrix_minutes = _calculate_distance_matrix(sites)
+    distance_matrix_minutes = calculate_distance_matrix(sites)
 
     solution = solve_single_day_vrptw(sites, request, distance_matrix_minutes)
 
@@ -60,37 +61,37 @@ def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
 
 
 
-def _calculate_distance_matrix(sites: List[Site], avg_speed_kmh: float = 60.0) -> List[List[int]]:
-    """Calculate travel time matrix including service time at destination.
+# def _calculate_distance_matrix(sites: List[Site], avg_speed_kmh: float = 60.0) -> List[List[int]]:
+#     """Calculate travel time matrix including service time at destination.
     
-    Returns a matrix where matrix[i][j] represents the time to travel from i to j
-    PLUS the service time at j. This ensures the solver accounts for service time.
-    """
-    def haversine_distance(lat1, lon1, lat2, lon2) -> float:
-        R = 6371
-        lat1_rad, lon1_rad = radians(lat1), radians(lon1)
-        lat2_rad, lon2_rad = radians(lat2), radians(lon2)
-        dlat = lat2_rad - lat1_rad
-        dlon = lon2_rad - lon1_rad
-        a = sin(dlat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon/2)**2
-        c = 2 * atan2(sqrt(a), sqrt(1-a))
-        return R * c
+#     Returns a matrix where matrix[i][j] represents the time to travel from i to j
+#     PLUS the service time at j. This ensures the solver accounts for service time.
+#     """
+#     def haversine_distance(lat1, lon1, lat2, lon2) -> float:
+#         R = 6371
+#         lat1_rad, lon1_rad = radians(lat1), radians(lon1)
+#         lat2_rad, lon2_rad = radians(lat2), radians(lon2)
+#         dlat = lat2_rad - lat1_rad
+#         dlon = lon2_rad - lon1_rad
+#         a = sin(dlat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon/2)**2
+#         c = 2 * atan2(sqrt(a), sqrt(1-a))
+#         return R * c
 
-    n = len(sites)
-    matrix = []
-    for i in range(n):
-        row = []
-        for j in range(n):
-            if i == j:
-                row.append(0)
-            else:
-                dist_km = haversine_distance(sites[i].lat, sites[i].lon, sites[j].lat, sites[j].lon)
-                travel_min = int((dist_km / avg_speed_kmh) * 60)
-                # Add service time at destination (j) to account for total time
-                total_time = travel_min + sites[j].service_minutes
-                row.append(total_time)
-        matrix.append(row)
-    return matrix
+#     n = len(sites)
+#     matrix = []
+#     for i in range(n):
+#         row = []
+#         for j in range(n):
+#             if i == j:
+#                 row.append(0)
+#             else:
+#                 dist_km = haversine_distance(sites[i].lat, sites[i].lon, sites[j].lat, sites[j].lon)
+#                 travel_min = int((dist_km / avg_speed_kmh) * 60)
+#                 # Add service time at destination (j) to account for total time
+#                 total_time = travel_min + sites[j].service_minutes
+#                 row.append(total_time)
+#         matrix.append(row)
+#     return matrix
 
 
 def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[TeamDay]:
@@ -169,11 +170,8 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     max_sites_per_vehicle = max(1, int(request.max_route_minutes / time_per_site))
     estimated_vehicles = max(1, (len(sites) + max_sites_per_vehicle - 1) // max_sites_per_vehicle)
 
-    # Cap vehicles if num_crews_available is set (fixed-crews mode)
-    if request.num_crews_available:
-        num_vehicles = min(estimated_vehicles, request.get_num_crews())
-    else:
-        num_vehicles = estimated_vehicles
+    # Use team_config.teams for number of vehicles (fixed-crews mode)
+    num_vehicles = min(estimated_vehicles, request.get_num_crews())
 
     manager = pywrapcp.RoutingIndexManager(data["num_locations"], num_vehicles, data["depot"])
     routing = pywrapcp.RoutingModel(manager)
@@ -188,9 +186,11 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     # Add time dimension
     # Parameters: callback, slack_max, capacity, fix_start_cumul_to_zero, name
     # fix_start_cumul_to_zero=False allows vehicles to start at different times
+    # In fast_mode, allow more slack for faster feasibility checks
+    slack_max = 30 if request.fast_mode else 0
     time_dimension_name = "Time"
     routing.AddDimension(transit_callback_index,
-                         60,  # slack_max: allow up to 60 min waiting time
+                         slack_max,  # slack_max: waiting time allowed at each location
                          request.max_route_minutes,  # capacity: max route duration
                          False,  # fix_start_cumul_to_zero: False for flexibility
                          time_dimension_name)
@@ -213,9 +213,18 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
 
     # Search parameters
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-    search_parameters.time_limit.seconds = 30
+     
+    # Adjust time limit based on fast_mode
+    if request.fast_mode:
+        search_parameters.time_limit.seconds = 1
+        search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+        search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.AUTOMATIC
+        search_parameters.lns_time_limit.seconds = 0
+    else:
+        search_parameters.time_limit.seconds = 15
+        search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+        search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    
     search_parameters.log_search = False
 
     solution = routing.SolveWithParameters(search_parameters)

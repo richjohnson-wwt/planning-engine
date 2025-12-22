@@ -33,6 +33,13 @@ class TeamDay(BaseModel):
 
     # Actual route consumption (travel + service + slack)
     route_minutes: int
+    
+    # Optional date field for multi-day scheduling
+    date: Optional[date] = None
+    
+    model_config = {
+        "json_schema_serialization_defaults_required": True
+    }
 
 
 class PlanRequest(BaseModel):
@@ -67,19 +74,62 @@ class PlanRequest(BaseModel):
     # OR-Tools solver specific fields
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    num_crews_available: Optional[int] = None  # If not provided, uses team_config.teams
     max_route_minutes: int = 480  # 8 hours default
     break_minutes: int = 30
     holidays: List[date] = Field(default_factory=list)
-    max_sites_per_crew_per_day: int = 8
     service_minutes_per_site: int = 60
-    minimize_crews: bool = True  # Try to use fewer crews
+    fast_mode: bool = False  # If True, use faster but less optimal solver settings
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "workspace": "foo",
+                    "sites": None,
+                    "team_config": {
+                        "teams": 1,
+                        "workday": {
+                            "start": "08:00:00",
+                            "end": "17:00:00"
+                        }
+                    },
+                    "state_abbr": "LA",
+                    "use_clusters": True,
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-01-31",
+                    "max_route_minutes": 480,
+                    "break_minutes": 30,
+                    "holidays": [],
+                    "service_minutes_per_site": 60,
+                    "fast_mode": True
+                }
+            ]
+        }
+    }
     
     def get_num_crews(self) -> int:
-        """Get number of crews from either num_crews_available or team_config."""
-        return self.num_crews_available if self.num_crews_available is not None else self.team_config.teams
+        """Get number of crews from team_config."""
+        return self.team_config.teams
 
 
 class PlanResult(BaseModel):
     team_days: List[TeamDay]
     unassigned: int = 0  # number of sites not scheduled
+    start_date: Optional[date] = None  # Actual start date used in planning
+    end_date: Optional[date] = None  # Calculated end date (for fixed crew mode)
+
+class CalendarPlanResult(BaseModel):
+    start_date: date
+    end_date: date
+    team_days: List[TeamDay]
+    unassigned: int
+    crews_used: int
+    planning_days_used: int
+
+    def to_plan_result(self) -> PlanResult:
+        return PlanResult(
+            team_days=self.team_days,
+            unassigned=self.unassigned,
+            start_date=self.start_date,
+            end_date=self.end_date,
+        )

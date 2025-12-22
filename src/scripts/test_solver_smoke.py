@@ -20,7 +20,8 @@ def main():
         sites=sites,
         team_config=team_config,
         max_route_minutes=480,   # 8 hours, enough for 3 sites + travel
-        service_minutes_per_site=60
+        service_minutes_per_site=60,
+        fast_mode=True
     )
 
     # --- 4. Plan routes ---

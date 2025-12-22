@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime, timedelta
-from .models import PlanRequest, PlanResult, TeamDay, Site
+from .models import PlanRequest, PlanResult, TeamDay, Site, CalendarPlanResult
+from .calendar_wrapper import plan_fixed_calendar, plan_fixed_crews
 
 
 def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
@@ -87,21 +87,15 @@ def plan(request: PlanRequest) -> PlanResult:
             + (f" with state '{request.state_abbr}'" if request.state_abbr else "")
         )
     
-    # Check if OR-Tools solver should be used
+    # Check if calendar-based planning should be used
     if request.start_date and request.end_date:
-        return _plan_with_ortools(request)
+        # Fixed calendar mode: optimize crews for date range
+        calendar_result = plan_fixed_calendar(request)
+        return calendar_result.to_plan_result()
     else:
-        # Simple fallback: assign all sites to team 1
-        total_service = sum(s.service_minutes for s in request.sites)
-        team_days = [
-            TeamDay(
-                team_id=1,
-                site_ids=[s.id for s in request.sites],
-                service_minutes=total_service,
-                route_minutes=total_service,  # No travel time in simple mode
-            )
-        ]
-        return PlanResult(team_days=team_days)
+        # Fixed crews mode: optimize days for given crews (using team_config.teams)
+        calendar_result = plan_fixed_crews(request)
+        return calendar_result.to_plan_result()
 
 
 def _plan_with_clusters(request: PlanRequest) -> PlanResult:
@@ -145,6 +139,8 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
     print(f"Planning {len(cluster_ids)} clusters for state '{request.state_abbr}'...")
     
     all_team_days = []
+    overall_start_date = None
+    overall_end_date = None
     
     # Plan each cluster separately
     for cluster_id in cluster_ids:
@@ -174,20 +170,30 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
             use_clusters=False,  # Prevent recursion
             start_date=request.start_date,
             end_date=request.end_date,
-            num_crews_available=request.num_crews_available,
             max_route_minutes=request.max_route_minutes,
             break_minutes=request.break_minutes,
             holidays=request.holidays,
-            max_sites_per_crew_per_day=request.max_sites_per_crew_per_day,
-            service_minutes_per_site=request.service_minutes_per_site,
-            minimize_crews=request.minimize_crews
+            service_minutes_per_site=request.service_minutes_per_site
         )
         
-        # Plan this cluster
-        cluster_result = _plan_with_ortools(cluster_request)
+        # Plan this cluster using calendar-based multi-day planning
+        if cluster_request.start_date and cluster_request.end_date:
+            cluster_calendar_result = plan_fixed_calendar(cluster_request)
+            cluster_result = cluster_calendar_result.to_plan_result()
+        else:
+            cluster_calendar_result = plan_fixed_crews(cluster_request)
+            cluster_result = cluster_calendar_result.to_plan_result()
+        
+        # Track the overall date range across all clusters
+        if cluster_result.start_date:
+            if overall_start_date is None or cluster_result.start_date < overall_start_date:
+                overall_start_date = cluster_result.start_date
+        if cluster_result.end_date:
+            if overall_end_date is None or cluster_result.end_date > overall_end_date:
+                overall_end_date = cluster_result.end_date
         
         # Adjust team IDs to be unique across clusters
-        # Cluster 0: teams 1-9, Cluster 1: teams 10-19, etc.
+        # Cluster 0: teams 1-N, Cluster 1: teams 101-10N, etc.
         for td in cluster_result.team_days:
             td.team_id = td.team_id + (cluster_id * 100)
         
@@ -196,7 +202,12 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
     
     # Combine results from all clusters
     print(f"✓ Total: {len(all_team_days)} team-days across {len(cluster_ids)} clusters")
-    return PlanResult(team_days=all_team_days, unassigned=0)
+    return PlanResult(
+        team_days=all_team_days,
+        unassigned=0,
+        start_date=overall_start_date,
+        end_date=overall_end_date
+    )
 
 
 def _plan_with_ortools(request: PlanRequest) -> PlanResult:

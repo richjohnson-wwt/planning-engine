@@ -6,13 +6,13 @@ This document tracks the implementation status of user-requested features.
 
 ### Team Assignments
 - ✅ **Allocate routes based on number of teams**
-  - Implementation: `num_crews_available` parameter
+  - Implementation: `team_config.teams` parameter
   - File: `models.py`, `ortools_solver.py`
   
 - ✅ **Auto-calculate number of teams needed**
-  - Implementation: `minimize_crews=True` mode
-  - File: `ortools_solver.py`
-  - The solver automatically determines minimum crews needed to complete all sites
+  - Implementation: Calendar-based planning with crew optimization
+  - File: `calendar_wrapper.py`, `ortools_solver.py`
+  - The solver automatically determines minimum crews needed to complete all sites within date constraints
 
 - ✅ **Divide based on regions**
   - Implementation: State-based filtering + cluster-based planning
@@ -29,11 +29,6 @@ This document tracks the implementation status of user-requested features.
   - Implementation: `Workday(start, end)` in `TeamConfig`
   - File: `models.py`
   - Example: `Workday(start=time(9,0), end=time(17,0))` = 8-hour workday
-
-- ✅ **Set number of sites per day per team**
-  - Implementation: `max_sites_per_crew_per_day` parameter
-  - File: `models.py`
-  - Default: 8 sites per crew per day
 
 ### Routing
 - ✅ **Team radius based on region**

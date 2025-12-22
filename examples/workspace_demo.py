@@ -30,7 +30,8 @@ team_config = TeamConfig(
 request = PlanRequest(
     workspace="my_project_2025",
     sites=sites,
-    team_config=team_config
+    team_config=team_config,
+    fast_mode=True
 )
 
 # Step 5: Call the planning engine

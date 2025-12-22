@@ -32,9 +32,10 @@ def main():
         ),
         start_date=date(2025, 1, 6),
         end_date=date(2025, 1, 6),
-        num_crews_available=2,  # Hard limit: only 2 crews available
+
         max_route_minutes=360,  # 6 hours
         service_minutes_per_site=90,
+        fast_mode=True
     )
 
     result = plan_single_day_vrp(request)

@@ -41,14 +41,20 @@ def batch_geocode_sites(addresses: list[str]) -> list[dict]:
     print(f"  Status: {job_data.get('status', 'unknown')}")
 
     # Poll for completion with timeout
-    max_attempts = 60  # 5 minutes max (60 attempts * 5 seconds)
+    # For large batches (500+ addresses), geocoding can take 10-15 minutes
+    max_attempts = 240  # 20 minutes max (240 attempts * 5 seconds = 1200 seconds)
     attempts = 0
+    
+    print(f"Waiting for geocoding to complete (max {max_attempts * 5 // 60} minutes)...")
     
     while attempts < max_attempts:
         attempts += 1
         status_resp = requests.get(job_url)
         
-        print(f"Polling attempt {attempts}/{max_attempts}: HTTP {status_resp.status_code}")
+        # Only print status every 6 attempts (30 seconds) to reduce noise
+        if attempts % 6 == 0 or attempts == 1:
+            elapsed_minutes = (attempts * 5) // 60
+            print(f"  [{elapsed_minutes}m] Polling attempt {attempts}/{max_attempts}: HTTP {status_resp.status_code}")
         
         # When the job is finished, status code is 200 and the response IS the results array
         if status_resp.status_code == 200:
