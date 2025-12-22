@@ -14,7 +14,7 @@ def get_project_root() -> Path:
     Get the project root directory (where data/ folder lives).
     
     This function searches upward from the current file location to find
-    the project root, identified by the presence of a 'data' directory.
+    the project root, identified by the presence of 'src' directory or 'pyproject.toml'.
     
     Returns:
         Path to the project root directory
@@ -22,13 +22,18 @@ def get_project_root() -> Path:
     Raises:
         RuntimeError: If project root cannot be found
     """
-    # Start from this file's directory
+    # Start from this file's directory (inside src/planning_engine/)
     current = Path(__file__).resolve().parent
     
     # Search upward for the project root (max 10 levels)
     for _ in range(10):
-        # Check if this directory contains 'data' folder
-        if (current / "data").exists():
+        # Check if this directory contains 'src' folder and 'pyproject.toml'
+        # These are more reliable markers than 'data' which might be created anywhere
+        if (current / "src").exists() and (current / "pyproject.toml").exists():
+            return current
+        
+        # Also check for pyproject.toml alone as a marker
+        if (current / "pyproject.toml").exists():
             return current
         
         # Move up one level
@@ -37,15 +42,10 @@ def get_project_root() -> Path:
             break
         current = parent
     
-    # Fallback: try using current working directory
-    cwd = Path.cwd()
-    if (cwd / "data").exists():
-        return cwd
-    
     # If still not found, raise an error
     raise RuntimeError(
         "Could not find project root directory. "
-        "Expected to find a 'data' directory in the project root. "
+        "Expected to find 'pyproject.toml' or 'src' directory in the project root. "
         f"Searched from {Path(__file__).resolve()} upward."
     )
 

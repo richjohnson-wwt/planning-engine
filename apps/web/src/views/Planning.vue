@@ -189,6 +189,10 @@ async function handleGeocode(stateName) {
   try {
     geocodingState.value = stateName
     
+    // Automatically select this state's radio button
+    stateInput.value = stateName
+    updateState()
+    
     // Call geocode API
     await geocodeAPI.geocode(store.workspace, stateName)
     
@@ -265,6 +269,12 @@ function updateState() {
 
 async function handlePlanSubmit() {
   try {
+    // Validate that a state is selected
+    if (!store.stateAbbr || store.stateAbbr.trim() === '') {
+      store.setError('Please select a state from the table above before planning routes.')
+      return
+    }
+    
     store.setLoading(true)
     store.setError(null)
     

@@ -319,7 +319,7 @@ def run_plan(request: PlanRequest):
     # Save results to workspace output folder organized by state
     if request.workspace and request.state_abbr:
         # Create state-specific output directory (matching cache structure)
-        output_dir = Path("data") / "workspace" / request.workspace / "output" / request.state_abbr
+        output_dir = get_project_root() / "data" / "workspace" / request.workspace / "output" / request.state_abbr
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Add timestamp to filename for versioning
