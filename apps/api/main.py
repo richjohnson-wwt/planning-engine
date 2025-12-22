@@ -207,5 +207,14 @@ def run_plan(request: PlanRequest):
             json.dump(output_data, f, indent=2)
         
         print(f"✓ Results saved to: {json_file}")
+        
+        # Auto-generate Folium map visualization
+        try:
+            from planning_engine.visualization import generate_folium_map
+            map_file = output_dir / f"route_map_{timestamp}.html"
+            generate_folium_map(result, map_file)
+            print(f"✓ Map generated: {map_file}")
+        except Exception as e:
+            print(f"⚠ Warning: Could not generate map: {e}")
     
     return result

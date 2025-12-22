@@ -13,6 +13,7 @@ class Site(BaseModel):
     lat: float
     lon: float
     service_minutes: int = 60
+    address: Optional[str] = None  # Full address for display and mapping
     blackout_dates: Optional[List[date]] = None
     index: Optional[int] = None  # Used by OR-Tools solver, set during planning
 
@@ -27,6 +28,7 @@ class TeamConfig(BaseModel):
 class TeamDay(BaseModel):
     team_id: int
     site_ids: List[str]
+    sites: Optional[List['Site']] = None  # Full site objects for mapping/visualization
 
     # Pure labor time
     service_minutes: int

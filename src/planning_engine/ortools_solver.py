@@ -102,6 +102,7 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[Te
         visits = route["visits"]
 
         site_ids = []
+        route_sites = []  # Collect full Site objects
         total_service = 0
         total_route = 0
 
@@ -111,6 +112,7 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[Te
             site = next((s for s in sites if s.name == visit["site"]), None)
             if site:
                 site_ids.append(site.id)
+                route_sites.append(site)  # Add full Site object
                 total_service += site.service_minutes
                 total_route += site.service_minutes + visit.get("travel_minutes", 0)
 
@@ -118,6 +120,7 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[Te
             td = TeamDay(
                 team_id=crew_id + 1,
                 site_ids=site_ids,
+                sites=route_sites,  # Include full Site objects for mapping
                 total_minutes=total_service,
                 service_minutes=total_service,
                 route_minutes=total_route

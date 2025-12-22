@@ -50,11 +50,24 @@ def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = 
     # Convert to Site objects
     sites = []
     for _, row in df.iterrows():
+        # Build full address from CSV fields
+        address_parts = []
+        if 'street1' in row and row['street1']:
+            address_parts.append(str(row['street1']))
+        if 'city' in row and row['city']:
+            address_parts.append(str(row['city']))
+        if 'state' in row and row['state']:
+            address_parts.append(str(row['state']))
+        if 'zip' in row and row['zip']:
+            address_parts.append(str(row['zip']))
+        full_address = ', '.join(address_parts) if address_parts else None
+        
         site = Site(
             id=str(row['site_id']),
             name=f"{row['city']} - {row['street1']}",
             lat=float(row['lat']),
             lon=float(row['lon']),
+            address=full_address,
             service_minutes=60  # Default service time
         )
         sites.append(site)
@@ -150,11 +163,24 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
         # Convert to Site objects
         cluster_sites = []
         for _, row in cluster_df.iterrows():
+            # Build full address from CSV fields
+            address_parts = []
+            if 'street1' in row and row['street1']:
+                address_parts.append(str(row['street1']))
+            if 'city' in row and row['city']:
+                address_parts.append(str(row['city']))
+            if 'state' in row and row['state']:
+                address_parts.append(str(row['state']))
+            if 'zip' in row and row['zip']:
+                address_parts.append(str(row['zip']))
+            full_address = ', '.join(address_parts) if address_parts else None
+            
             site = Site(
                 id=str(row['site_id']),
                 name=f"{row['city']} - {row['street1']}",
                 lat=float(row['lat']),
                 lon=float(row['lon']),
+                address=full_address,
                 service_minutes=request.service_minutes_per_site
             )
             cluster_sites.append(site)
