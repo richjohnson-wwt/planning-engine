@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 import pandas as pd
 from .models import Site
+from .paths import get_workspace_path
 
 
 def load_sites_from_workspace(
@@ -50,7 +51,7 @@ def load_sites_from_workspace(
         >>> result = plan(req)
     """
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / workspace_name
+    workspace_path = get_workspace_path(workspace_name)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{workspace_name}' does not exist. "

@@ -1,0 +1,63 @@
+"""Path utilities for the planning engine.
+
+This module provides utilities for resolving paths to the project root
+and workspace directories, ensuring the library works correctly regardless
+of where it's invoked from.
+"""
+
+from pathlib import Path
+import os
+
+
+def get_project_root() -> Path:
+    """
+    Get the project root directory (where data/ folder lives).
+    
+    This function searches upward from the current file location to find
+    the project root, identified by the presence of a 'data' directory.
+    
+    Returns:
+        Path to the project root directory
+        
+    Raises:
+        RuntimeError: If project root cannot be found
+    """
+    # Start from this file's directory
+    current = Path(__file__).resolve().parent
+    
+    # Search upward for the project root (max 10 levels)
+    for _ in range(10):
+        # Check if this directory contains 'data' folder
+        if (current / "data").exists():
+            return current
+        
+        # Move up one level
+        parent = current.parent
+        if parent == current:  # Reached filesystem root
+            break
+        current = parent
+    
+    # Fallback: try using current working directory
+    cwd = Path.cwd()
+    if (cwd / "data").exists():
+        return cwd
+    
+    # If still not found, raise an error
+    raise RuntimeError(
+        "Could not find project root directory. "
+        "Expected to find a 'data' directory in the project root. "
+        f"Searched from {Path(__file__).resolve()} upward."
+    )
+
+
+def get_workspace_path(workspace_name: str) -> Path:
+    """
+    Get the path to a workspace directory.
+    
+    Args:
+        workspace_name: Name of the workspace
+        
+    Returns:
+        Path to the workspace directory
+    """
+    return get_project_root() / "data" / "workspace" / workspace_name

@@ -15,17 +15,32 @@ export const workspaceAPI = {
   },
   
   list() {
-    // Note: This endpoint may need to be added to FastAPI backend
     return api.get('/workspaces')
+  },
+  
+  getStates(workspaceName) {
+    return api.get(`/workspaces/${workspaceName}/states`)
   }
 }
 
 // Excel parsing API
 export const excelAPI = {
-  parse(workspaceName, stateAbbr, file) {
+  parse(workspaceName, filePath, sheetName, columnMapping) {
+    return api.post('/parse-excel', {
+      workspace_name: workspaceName,
+      file_path: filePath,
+      sheet_name: sheetName,
+      column_mapping: columnMapping
+    })
+  },
+  parseWithFile(workspaceName, file, sheetName, columnMapping) {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/parse-excel?workspace_name=${workspaceName}&state_abbr=${stateAbbr}`, formData, {
+    formData.append('workspace_name', workspaceName)
+    formData.append('sheet_name', sheetName)
+    formData.append('column_mapping', JSON.stringify(columnMapping))
+    
+    return api.post('/parse-excel-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

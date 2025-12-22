@@ -19,10 +19,10 @@ export const usePlanningStore = defineStore('planning', () => {
     start_date: null,
     end_date: null,
     max_route_minutes: 480,
-    service_minutes_per_site: 60,
+    service_minutes_per_site: 30,
     break_minutes: 30,
     holidays: [],
-    fast_mode: true
+    fast_mode: false
   })
   
   const planResult = ref(null)

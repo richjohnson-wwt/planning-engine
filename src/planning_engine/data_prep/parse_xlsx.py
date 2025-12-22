@@ -5,7 +5,8 @@ from pathlib import Path
 def parse_excel_to_csv(
     file_path: str,
     output_path: str,
-    column_mapping: dict[str, str] | None = None
+    column_mapping: dict[str, str] | None = None,
+    sheet_name: str | None = None
 ) -> dict[str, Path]:
     """
     Parse an Excel file, rename columns according to mapping, and save to CSV files organized by state.
@@ -21,6 +22,7 @@ def parse_excel_to_csv(
                        Format: {standard_name: excel_column_name}
                        Example: {"site_id": "Location", "street1": "MyStreet1"}
                        If None, includes all columns with original names.
+        sheet_name: Name of the Excel sheet to parse. If None, uses the first sheet (default pandas behavior).
         
     Returns:
         Dict mapping state names to their CSV file paths
@@ -31,7 +33,8 @@ def parse_excel_to_csv(
         ValueError: If mapped columns don't exist in the Excel file or 'state' column is missing
     """
     # Read Excel file with openpyxl engine
-    df = pd.read_excel(file_path, engine='openpyxl')
+    # If sheet_name is None, pandas will read the first sheet by default
+    df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
     
     # If column mapping is specified, validate and rename columns
     if column_mapping is not None:

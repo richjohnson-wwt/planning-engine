@@ -18,6 +18,13 @@ Custom Parameters:
 * Craw, Walk, Run – Ramp Phase approach
  
 
+# Running the app
+    
+    cd apps/api
+    uvicorn main:app --reload
+
+    cd apps/web
+    npm run dev
 
 # Workflow
 

@@ -24,59 +24,16 @@ const steps = ref([
   {
     id: 1,
     number: 1,
-    title: 'Upload Excel',
-    description: 'Import site addresses',
+    title: 'Geocode & Cluster',
+    description: 'Convert addresses to GPS coordinates and group sites geographically (runs automatically)',
     completed: false,
-    actionLabel: 'Upload',
-    action: () => {
-      // Trigger file input
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = '.xlsx,.xls'
-      input.onchange = async (e) => {
-        const file = e.target.files[0]
-        if (file) {
-          try {
-            await excelAPI.parse(store.workspace, store.stateAbbr, file)
-            steps.value[0].completed = true
-            alert('Excel file uploaded successfully!')
-          } catch (err) {
-            alert(`Error: ${err.response?.data?.detail || err.message}`)
-          }
-        }
-      }
-      input.click()
-    }
-  },
-  {
-    id: 2,
-    number: 2,
-    title: 'Geocode',
-    description: 'Convert addresses to GPS',
-    completed: false,
-    actionLabel: 'Geocode',
+    actionLabel: 'Process',
     action: async () => {
       try {
         await geocodeAPI.geocode(store.workspace, store.stateAbbr)
-        steps.value[1].completed = true
-        alert('Geocoding completed!')
-      } catch (err) {
-        alert(`Error: ${err.response?.data?.detail || err.message}`)
-      }
-    }
-  },
-  {
-    id: 3,
-    number: 3,
-    title: 'Cluster (Optional)',
-    description: 'Group sites geographically',
-    completed: false,
-    actionLabel: 'Cluster',
-    action: async () => {
-      try {
         await clusterAPI.cluster(store.workspace, store.stateAbbr)
-        steps.value[2].completed = true
-        alert('Clustering completed!')
+        steps.value[0].completed = true
+        alert('Geocoding and clustering completed!')
       } catch (err) {
         alert(`Error: ${err.response?.data?.detail || err.message}`)
       }

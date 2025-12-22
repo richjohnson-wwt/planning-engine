@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Optional
 from .models import PlanRequest, PlanResult, TeamDay, Site, CalendarPlanResult
 from .calendar_wrapper import plan_fixed_calendar, plan_fixed_crews
+from .paths import get_workspace_path
 
 
 def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
@@ -29,7 +30,7 @@ def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = 
         )
     
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / workspace_name
+    workspace_path = get_workspace_path(workspace_name)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{workspace_name}' does not exist. "
@@ -137,7 +138,7 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
         )
     
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / request.workspace
+    workspace_path = get_workspace_path(request.workspace)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{request.workspace}' does not exist. "
@@ -261,7 +262,7 @@ def new_workspace(workspace_name: str) -> Path:
         raise ValueError(f"Invalid workspace name: {workspace_name}")
     
     # Create workspace directory under /data/workspace
-    workspace_path = Path("data") / "workspace" / safe_name
+    workspace_path = get_workspace_path(safe_name)
     workspace_path.mkdir(parents=True, exist_ok=True)
     
     # Create subdirectories for organizing workflow data
@@ -275,7 +276,8 @@ def new_workspace(workspace_name: str) -> Path:
 def parse_excel(
     workspace_name: str,
     file_path: str,
-    column_mapping: dict[str, str]
+    column_mapping: dict[str, str],
+    sheet_name: str | None = None
 ) -> dict[str, Path]:
     """
     Parse an Excel file and save mapped columns to the workspace, organized by state.
@@ -295,6 +297,7 @@ def parse_excel(
                        Example: {"site_id": "Location", "street1": "MyStreet1",
                                 "city": "MyCity", "state": "MyState", "zip": "MyZip"}
                        Optional: {"street2": "MyStreet2"}
+        sheet_name: Name of the Excel sheet to parse. If None, uses the first sheet.
         
     Returns:
         Dict mapping state names to their addresses.csv file paths
@@ -321,7 +324,7 @@ def parse_excel(
         )
     
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / workspace_name
+    workspace_path = get_workspace_path(workspace_name)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{workspace_name}' does not exist. "
@@ -341,7 +344,8 @@ def parse_excel(
     state_files = parse_excel_to_csv(
         file_path=str(excel_file),
         output_path=str(output_path),
-        column_mapping=column_mapping
+        column_mapping=column_mapping,
+        sheet_name=sheet_name
     )
     
     print(f"✓ Parsed {len(state_files)} states: {', '.join(state_files.keys())}")
@@ -371,7 +375,7 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     from .data_prep.geocode import batch_geocode_sites
     
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / workspace_name
+    workspace_path = get_workspace_path(workspace_name)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{workspace_name}' does not exist. "
@@ -455,7 +459,7 @@ def cluster(workspace_name: str, state_abbr: str) -> Path:
     from .data_prep.cluster import cluster_sites
     
     # Validate workspace exists
-    workspace_path = Path("data") / "workspace" / workspace_name
+    workspace_path = get_workspace_path(workspace_name)
     if not workspace_path.exists():
         raise FileNotFoundError(
             f"Workspace '{workspace_name}' does not exist. "

@@ -102,9 +102,22 @@ def plan_fixed_crews(request: PlanRequest) -> CalendarPlanResult:
         )
 
         if not solution or solution.get("unassigned", 0) == len(sites_remaining):
-            raise RuntimeError(
-                f"No progress possible with {crews} crews"
+            # Provide detailed error message with diagnostics
+            sites_scheduled = solution.get("total_sites_scheduled", 0) if solution else 0
+            unassigned = solution.get("unassigned", len(sites_remaining)) if solution else len(sites_remaining)
+            
+            error_msg = (
+                f"No progress possible with {crews} crews on day {planning_days_used + 1}.\n"
+                f"Sites remaining: {len(sites_remaining)}, "
+                f"Sites scheduled: {sites_scheduled}, "
+                f"Unassigned: {unassigned}.\n"
+                f"Suggestions:\n"
+                f"  - Try disabling 'Fast Mode' for better optimization\n"
+                f"  - Increase 'Max Route Minutes' (current: {request.max_route_minutes})\n"
+                f"  - Decrease 'Service Minutes per Site' (current: {request.service_minutes_per_site})\n"
+                f"  - Increase number of teams/crews (current: {crews})"
             )
+            raise RuntimeError(error_msg)
 
         # Convert solution to TeamDay objects
         day_team_days = _convert_solution_to_team_days(solution, sites_with_depot)

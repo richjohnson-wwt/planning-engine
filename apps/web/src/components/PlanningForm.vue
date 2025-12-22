@@ -46,29 +46,38 @@
         <div class="form-group">
           <label>
             <input type="radio" v-model="planningMode" value="fixed-crew" />
-            Fixed Crew Mode (calculate end date)
+            Fixed Crew Mode
           </label>
+          <p class="help-text">System calculates how long it will take with the specified number of crews</p>
         </div>
         
         <div class="form-group">
           <label>
             <input type="radio" v-model="planningMode" value="fixed-calendar" />
-            Fixed Calendar Mode (calculate crews needed)
+            Fixed Calendar Mode
           </label>
+          <p class="help-text">System calculates how many crews are needed to complete by the end date</p>
         </div>
         
         <div class="form-group">
-          <label for="start-date">Start Date</label>
+          <label for="start-date">
+            Start Date
+            <span v-if="planningMode === 'fixed-crew'" class="optional-label">(optional - defaults to today)</span>
+            <span v-else class="required-label">*</span>
+          </label>
           <input
             id="start-date"
             v-model="formData.start_date"
             type="date"
             class="form-control"
+            :placeholder="planningMode === 'fixed-crew' ? 'Leave blank for today' : ''"
           />
         </div>
         
         <div v-if="planningMode === 'fixed-calendar'" class="form-group">
-          <label for="end-date">End Date</label>
+          <label for="end-date">
+            End Date <span class="required-label">*</span>
+          </label>
           <input
             id="end-date"
             v-model="formData.end_date"
@@ -121,13 +130,6 @@
             Use Clustering
           </label>
         </div>
-        
-        <div class="form-group">
-          <label>
-            <input type="checkbox" v-model="formData.fast_mode" />
-            Fast Mode
-          </label>
-        </div>
       </div>
       
       <button type="submit" class="btn btn-primary btn-large">
@@ -167,6 +169,11 @@ function handleSubmit() {
   // Ensure latest workspace and state from store
   formData.value.workspace = store.workspace
   formData.value.state_abbr = store.stateAbbr
+  
+  // Ensure end_date is null for fixed-crew mode
+  if (planningMode.value === 'fixed-crew') {
+    formData.value.end_date = null
+  }
   
   // Update store with form data
   store.updatePlanRequest(formData.value)
@@ -230,6 +237,25 @@ label {
 input[type="checkbox"],
 input[type="radio"] {
   margin-right: 0.5rem;
+}
+
+.help-text {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.optional-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.required-label {
+  color: #dc2626;
+  font-weight: 600;
 }
 
 .btn {
