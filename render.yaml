@@ -18,7 +18,6 @@ services:
   - type: web
     name: planning-engine-web
     runtime: static
-    plan: free
     buildCommand: cd apps/web && npm install && npm run build
     staticPublishPath: ./apps/web/dist
     envVars:
