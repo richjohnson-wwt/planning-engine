@@ -33,9 +33,8 @@ def fixed_crews_test():
         workspace="test",
         sites=sites,
         team_config=TeamConfig(teams=3, workday=Workday(start=time(9,0), end=time(17,0))),
-        num_crews_available=3,  # Fixed: only 3 crews available
+
         max_route_minutes=480,
-        minimize_crews=False,  # Use all available crews
         fast_mode=True
     )
 
@@ -64,7 +63,6 @@ def fixed_dates_test():
         start_date=start,
         end_date=end,
         max_route_minutes=480,
-        minimize_crews=True,
         fast_mode=True
     )
 

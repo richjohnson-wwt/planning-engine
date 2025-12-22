@@ -104,15 +104,20 @@ def main():
                 workday=Workday(start=time(hour=8, minute=0), end=time(hour=17, minute=0))
             )
             
+            # Create team_config with 1 crew for this cluster
+            cluster_team_config = TeamConfig(
+                teams=1,
+                workday=team_config.workday
+            )
+            
             # Create plan request for this cluster
             request = PlanRequest(
                 workspace=WORKSPACE_NAME,
                 sites=cluster_sites,
-                team_config=team_config,
+                team_config=cluster_team_config,
                 # OR-Tools specific fields
                 start_date=date(2025, 1, 6),  # Monday
                 end_date=date(2025, 1, 10),   # Friday (5 days)
-                num_crews_available=1,
                 max_route_minutes=480,  # 8 hours
                 break_minutes=30,
                 holidays=[],
@@ -154,12 +159,10 @@ def main():
             # OR-Tools specific fields for optimized routing
             start_date=date(2025, 1, 6),  # Monday
             end_date=date(2025, 1, 10),   # Friday (5 days)
-            num_crews_available=2,
             max_route_minutes=480,  # 8 hours
             break_minutes=30,
             holidays=[],
-            max_sites_per_crew_per_day=5,
-            minimize_crews=True,
+            max_sites_per_crew_per_day=5
         )
         
         # Run planning

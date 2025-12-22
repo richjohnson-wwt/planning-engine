@@ -6,13 +6,13 @@ This document tracks the implementation status of user-requested features.
 
 ### Team Assignments
 - ✅ **Allocate routes based on number of teams**
-  - Implementation: `num_crews_available` parameter
+  - Implementation: `team_config.teams` parameter
   - File: `models.py`, `ortools_solver.py`
   
 - ✅ **Auto-calculate number of teams needed**
-  - Implementation: `minimize_crews=True` mode
-  - File: `ortools_solver.py`
-  - The solver automatically determines minimum crews needed to complete all sites
+  - Implementation: Calendar-based planning with crew optimization
+  - File: `calendar_wrapper.py`, `ortools_solver.py`
+  - The solver automatically determines minimum crews needed to complete all sites within date constraints
 
 - ✅ **Divide based on regions**
   - Implementation: State-based filtering + cluster-based planning

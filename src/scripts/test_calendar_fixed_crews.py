@@ -23,7 +23,7 @@ def main():
         workspace="fixed_crews_calendar",
         sites=sites,
         team_config=TeamConfig(teams=10, workday=Workday(start=time(8), end=time(17))),
-        num_crews_available=3,
+
         max_route_minutes=480,
         service_minutes_per_site=60,
         fast_mode=True,

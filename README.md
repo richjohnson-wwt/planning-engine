@@ -99,7 +99,6 @@ Custom Parameters:
     },
     "start_date": "2025-01-06",
     "end_date": "2025-01-06",
-    "num_crews_available": 2,
     "max_route_minutes": 480,
     "service_minutes_per_site": 60,
     "holidays": [],
@@ -117,7 +116,7 @@ request = PlanRequest(
     sites=150_sites,
     start_date=date(2025, 1, 1),    # Start when ready
     end_date=None,                   # ❓ Calculate this!
-    num_crews_available=3,           # Fixed: only 3 crews
+    team_config=TeamConfig(teams=3, workday=...),  # Fixed: only 3 crews
     max_route_minutes=480,
     service_minutes_per_site=60,
 )
@@ -138,15 +137,15 @@ request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
     sites=150_sites,
-    start_date=date(2025, 1, 1),    # Must start Jan 1
-    end_date=date(2025, 1, 5),      # Must finish by Jan 5 (5 days)
-    num_crews_available=None,        # ❓ Calculate this!
+    start_date=None,                 # ❓ Calculate this!
+    end_date=date(2025, 1, 31),      # Must finish by Jan 31
+    team_config=TeamConfig(teams=None, workday=...),  # ❓ Calculate this!
     max_route_minutes=480,
     service_minutes_per_site=60,
 )
 
 # Multi-day scheduler will:
-# 1. Calculate work days: 5 days (Jan 1-5)
+# 1. Calculate work days: 5 days (Jan 1-31)
 # 2. Calculate required capacity: 150 sites ÷ 5 days = 30 sites/day
 # 3. Calculate crews needed: 30 sites/day ÷ 8 sites/crew = 4 crews
 # 4. Call plan_single_day_vrp() for each day with 4 crews
@@ -165,7 +164,7 @@ request = PlanRequest(
     state_abbr="LA",
     start_date=date(2025, 1, 1),     # Start date
     end_date=None,                    # Will be calculated
-    num_crews_available=3,            # Fixed: 3 crews
+    team_config=TeamConfig(teams=3, workday=...),  # Fixed: only 3 crews
     # ... other params
 )
 
@@ -187,8 +186,7 @@ request = PlanRequest(
     state_abbr="LA",
     start_date=date(2025, 1, 1),     # Must start Jan 1
     end_date=date(2025, 1, 5),       # Must finish Jan 5 (5 days)
-    num_crews_available=None,         # Will be calculated
-    minimize_crews=True,              # Find minimum needed
+    # team_config.teams will be calculated automatically
     # ... other params
 )
 

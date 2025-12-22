@@ -24,7 +24,7 @@ def test_plan_with_ortools_simple():
         team_config=team_config,
         start_date=date(2025, 1, 1),
         end_date=date(2025, 1, 2),
-        num_crews_available=2,
+
         max_route_minutes=480,
         holidays=[],
         fast_mode=True

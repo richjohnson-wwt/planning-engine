@@ -58,8 +58,7 @@ def greedy_estimate_crews(
 
 
 def plan_fixed_crews(request: PlanRequest) -> CalendarPlanResult:
-    crews = request.num_crews_available
-    assert crews is not None
+    crews = request.team_config.teams
 
     sites_remaining: List[Site] = list(request.sites)
     team_days: List[TeamDay] = []
@@ -154,9 +153,11 @@ def plan_fixed_calendar(request: PlanRequest) -> CalendarPlanResult:
         )
 
         if feasible:
+            # Update team_config with the calculated number of crews
+            updated_team_config = request.team_config.model_copy(update={"teams": crews})
             return plan_fixed_crews(
                 request.model_copy(
-                    update={"num_crews_available": crews}
+                    update={"team_config": updated_team_config}
                 )
             )
 
@@ -174,8 +175,9 @@ def _validate_calendar_feasibility(
     # Create a copy with updated crews and enable fast_mode for feasibility checks
     # Fast mode is appropriate here since we only need to know if a solution exists,
     # not optimize it
+    updated_team_config = request.team_config.model_copy(update={"teams": crews})
     request_copy = request.model_copy(update={
-        "num_crews_available": crews,
+        "team_config": updated_team_config,
         "fast_mode": True
     })
 

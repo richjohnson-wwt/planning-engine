@@ -170,11 +170,8 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     max_sites_per_vehicle = max(1, int(request.max_route_minutes / time_per_site))
     estimated_vehicles = max(1, (len(sites) + max_sites_per_vehicle - 1) // max_sites_per_vehicle)
 
-    # Cap vehicles if num_crews_available is set (fixed-crews mode)
-    if request.num_crews_available:
-        num_vehicles = min(estimated_vehicles, request.get_num_crews())
-    else:
-        num_vehicles = estimated_vehicles
+    # Use team_config.teams for number of vehicles (fixed-crews mode)
+    num_vehicles = min(estimated_vehicles, request.get_num_crews())
 
     manager = pywrapcp.RoutingIndexManager(data["num_locations"], num_vehicles, data["depot"])
     routing = pywrapcp.RoutingModel(manager)

@@ -16,7 +16,8 @@ def test_plan_counts_sites():
             Site(id="A", name="Site A", lat=38.6270, lon=-90.1994, service_minutes=30),
             Site(id="B", name="Site B", lat=38.6400, lon=-90.2500, service_minutes=45),
         ],
-        team_config=team_config
+        team_config=team_config,
+        fast_mode=True,
     )
 
     # WHEN: We run the planning engine

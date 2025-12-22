@@ -28,7 +28,7 @@ request = PlanRequest(
     # OR-Tools specific fields
     start_date=date(2025, 1, 6),  # Monday
     end_date=date(2025, 1, 8),    # Wednesday (3 days)
-    num_crews_available=2,
+
     max_route_minutes=480,  # 8 hours
     break_minutes=30,
     holidays=[],  # No holidays in this period
@@ -43,6 +43,14 @@ result: PlanResult = plan(request)
 print(f"\n{'='*60}")
 print("OPTIMIZED ROUTE PLAN")
 print(f"{'='*60}\n")
+
+# Display date range
+if result.start_date:
+    print(f"Start Date: {result.start_date}")
+if result.end_date:
+    print(f"End Date: {result.end_date}")
+if result.start_date or result.end_date:
+    print()
 
 # Group by team
 team_schedule = {}
