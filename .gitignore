@@ -17,3 +17,9 @@ data/
 uv.lock
 
 .DS_Store
+
+apps/web/.env
+apps/web/.env.local
+apps/web/.env.example
+apps/web/node_modules
+apps/web/package-lock.json

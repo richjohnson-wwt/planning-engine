@@ -100,13 +100,21 @@ def plan(request: PlanRequest) -> PlanResult:
             + (f" with state '{request.state_abbr}'" if request.state_abbr else "")
         )
     
-    # Check if calendar-based planning should be used
+    # Determine planning mode based on date parameters
     if request.start_date and request.end_date:
-        # Fixed calendar mode: optimize crews for date range
+        # Mode 1: Fixed Calendar - both dates provided, system calculates crews needed
         calendar_result = plan_fixed_calendar(request)
         return calendar_result.to_plan_result()
+    elif request.end_date and not request.start_date:
+        # Invalid: can't have end_date without start_date
+        raise ValueError(
+            "end_date cannot be specified without start_date. "
+            "For fixed calendar mode, provide both start_date and end_date. "
+            "For fixed crew mode, provide only start_date (or neither)."
+        )
     else:
-        # Fixed crews mode: optimize days for given crews (using team_config.teams)
+        # Mode 2: Fixed Crew - only start_date (or neither), system calculates end_date
+        # start_date is optional and defaults to today if not provided
         calendar_result = plan_fixed_crews(request)
         return calendar_result.to_plan_result()
 

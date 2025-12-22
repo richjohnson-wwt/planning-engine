@@ -93,6 +93,24 @@ class ClusterResponse(BaseModel):
     num_clusters: int
 
 
+@app.get("/workspaces")
+def list_workspaces():
+    """List all existing workspaces"""
+    from pathlib import Path
+    
+    workspace_dir = Path("data") / "workspace"
+    if not workspace_dir.exists():
+        return {"workspaces": []}
+    
+    # Get all subdirectories in data/workspace
+    workspaces = [
+        d.name for d in workspace_dir.iterdir() 
+        if d.is_dir() and not d.name.startswith('.')
+    ]
+    
+    return {"workspaces": sorted(workspaces)}
+
+
 @app.post("/workspace", response_model=WorkspaceResponse)
 def create_workspace(request: WorkspaceRequest):
     """Create a new workspace for organizing planning workflows"""
