@@ -121,18 +121,18 @@ request = PlanRequest(
     service_minutes_per_site=60,
 )
 
-# Multi-day scheduler will:
-# 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
-# 2. Calculate days needed: 150 sites ÷ 24 = ~7 days
-# 3. Generate work days starting from start_date
-# 4. Call plan_single_day_vrp() for each of those 7 days
-# 5. Return: "Will take 7 work days with 3 crews"
+### Multi-day scheduler will:
+ 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
+ 2. Calculate days needed: 150 sites ÷ 24 = ~7 days
+ 3. Generate work days starting from start_date
+ 4. Call plan_single_day_vrp() for each of those 7 days
+ 5. Return: "Will take 7 work days with 3 crews"
 
 result = plan_multi_day_schedule(request)
 # Output: 21 team-days (7 days × 3 crews)
 
 
-#Mode 2: Fixed Dates → How Many Crews Needed?
+### Mode 2: Fixed Dates → How Many Crews Needed?
 request = PlanRequest(
     workspace="foo",
     state_abbr="LA",
@@ -144,20 +144,20 @@ request = PlanRequest(
     service_minutes_per_site=60,
 )
 
-# Multi-day scheduler will:
-# 1. Calculate work days: 5 days (Jan 1-31)
-# 2. Calculate required capacity: 150 sites ÷ 5 days = 30 sites/day
-# 3. Calculate crews needed: 30 sites/day ÷ 8 sites/crew = 4 crews
-# 4. Call plan_single_day_vrp() for each day with 4 crews
-# 5. Return: "Need 4 crews to complete in 5 days"
+### Multi-day scheduler will:
+ 1. Calculate work days: 5 days (Jan 1-31)
+ 2. Calculate required capacity: 150 sites ÷ 5 days = 30 sites/day
+ 3. Calculate crews needed: 30 sites/day ÷ 8 sites/crew = 4 crews
+ 4. Call plan_single_day_vrp() for each day with 4 crews
+ 5. Return: "Need 4 crews to complete in 5 days"
 
 result = plan_multi_day_schedule(request)
-# Output: 20 team-days (5 days × 4 crews)
+Output: 20 team-days (5 days × 4 crews)
 
 
 
-#Mode 1: Fixed Crews → Calculate Duration
-# "I have 3 crews. How long will it take to complete 150 sites?"
+### Mode 1: Fixed Crews → Calculate Duration
+"I have 3 crews. How long will it take to complete 150 sites?"
 
 request = PlanRequest(
     workspace="foo",
@@ -170,16 +170,16 @@ request = PlanRequest(
 
 result = plan_multi_day_schedule(request)
 
-# Scheduler will:
-# 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
-# 2. Calculate days: 150 ÷ 24 = 7 days needed
-# 3. Generate 7 work days from start_date
-# 4. Call plan_single_day_vrp() for each day
-# 5. Return: "7 days with 3 crews = 21 team-days"
+Scheduler will:
+ 1. Calculate capacity: 3 crews × 8 sites/day = 24 sites/day
+ 2. Calculate days: 150 ÷ 24 = 7 days needed
+ 3. Generate 7 work days from start_date
+ 4. Call plan_single_day_vrp() for each day
+ 5. Return: "7 days with 3 crews = 21 team-days"
 
 
-#Mode 2: Fixed Dates → Calculate Crews
-# "I need to finish 150 sites by Jan 5. How many crews do I need?"
+### Mode 2: Fixed Dates → Calculate Crews
+"I need to finish 150 sites by Jan 5. How many crews do I need?"
 
 request = PlanRequest(
     workspace="foo",
@@ -192,9 +192,9 @@ request = PlanRequest(
 
 result = plan_multi_day_schedule(request)
 
-# Scheduler will:
-# 1. Calculate work days: 5 days
-# 2. Calculate required: 150 ÷ 5 = 30 sites/day
-# 3. Calculate crews: 30 ÷ 8 = 4 crews needed
-# 4. Call plan_single_day_vrp() for each day with 4 crews
-# 5. Return: "4 crews for 5 days = 20 team-days"
+Scheduler will:
+ 1. Calculate work days: 5 days
+ 2. Calculate required: 150 ÷ 5 = 30 sites/day
+ 3. Calculate crews: 30 ÷ 8 = 4 crews needed
+ 4. Call plan_single_day_vrp() for each day with 4 crews
+ 5. Return: "4 crews for 5 days = 20 team-days"
