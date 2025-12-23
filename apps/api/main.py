@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
 from planning_engine.models import PlanRequest, PlanResult
+from planning_engine.paths import get_project_root
 from pydantic import BaseModel
 from pathlib import Path
 import warnings
@@ -18,11 +19,6 @@ logging.basicConfig(
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.type_adapter")
 
 app = FastAPI(title="Planning Engine API")
-
-# Helper to get project root (2 levels up from this file)
-def get_project_root() -> Path:
-    """Get the project root directory (where data/ folder lives)"""
-    return Path(__file__).parent.parent.parent
 
 
 class WorkspaceRequest(BaseModel):
