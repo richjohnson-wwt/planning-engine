@@ -46,7 +46,7 @@
       </div>
       
       <!-- Output Files Section -->
-      <div v-if="store.workspace && store.stateAbbr" class="output-files-section">
+      <div v-if="workspaceFromResult && stateFromResult" class="output-files-section">
         <h3>Generated Files</h3>
         <div v-if="loadingFiles" class="loading">Loading files...</div>
         <div v-else-if="outputFiles.length > 0" class="files-list">
@@ -98,6 +98,15 @@ const totalSites = computed(() => {
   return store.planResult.team_days.reduce((sum, td) => sum + (td.site_ids?.length || 0), 0)
 })
 
+// Get workspace and state from planRequest (which is populated when planning)
+const workspaceFromResult = computed(() => {
+  return store.planRequest?.workspace || store.workspace
+})
+
+const stateFromResult = computed(() => {
+  return store.planRequest?.state_abbr || store.stateAbbr
+})
+
 function formatDate(dateStr) {
   if (!dateStr) return 'N/A'
   return new Date(dateStr).toLocaleDateString()
@@ -115,12 +124,23 @@ function exportJSON() {
 }
 
 async function fetchOutputFiles() {
-  if (!store.selectedWorkspace || !store.selectedState) return
+  const workspace = workspaceFromResult.value
+  const state = stateFromResult.value
+  
+  console.log('fetchOutputFiles called', { workspace, state })
+  
+  if (!workspace || !state) {
+    console.log('Missing workspace or state, skipping fetch')
+    return
+  }
   
   loadingFiles.value = true
   try {
-    const response = await outputAPI.listFiles(store.selectedWorkspace, store.selectedState)
+    console.log(`Fetching files from: /workspaces/${workspace}/output/${state}`)
+    const response = await outputAPI.listFiles(workspace, state)
+    console.log('API response:', response.data)
     outputFiles.value = response.data.files || []
+    console.log('Output files set:', outputFiles.value.length, 'files')
   } catch (error) {
     console.error('Error fetching output files:', error)
     outputFiles.value = []
@@ -145,7 +165,7 @@ onMounted(() => {
   fetchOutputFiles()
 })
 
-watch([() => store.workspace, () => store.stateAbbr], () => {
+watch([workspaceFromResult, stateFromResult], () => {
   fetchOutputFiles()
 })
 
