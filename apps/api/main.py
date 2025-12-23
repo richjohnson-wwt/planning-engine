@@ -123,8 +123,12 @@ class ClusterResponse(BaseModel):
 @app.get("/workspaces")
 def list_workspaces():
     """List all existing workspaces"""
+    logger = logging.getLogger(__name__)
     workspace_dir = get_project_root() / "data" / "workspace"
+    logger.info(f"Listing workspaces from: {workspace_dir}")
+    
     if not workspace_dir.exists():
+        logger.warning(f"Workspace directory does not exist: {workspace_dir}")
         return {"workspaces": []}
     
     # Get all subdirectories in data/workspace
@@ -133,6 +137,7 @@ def list_workspaces():
         if d.is_dir() and not d.name.startswith('.')
     ]
     
+    logger.info(f"Found {len(workspaces)} workspaces: {workspaces}")
     return {"workspaces": sorted(workspaces)}
 
 
@@ -184,7 +189,12 @@ def list_workspace_states(workspace_name: str):
 @app.post("/workspace", response_model=WorkspaceResponse)
 def create_workspace(request: WorkspaceRequest):
     """Create a new workspace for organizing planning workflows"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Creating workspace: {request.workspace_name}")
+    
     workspace_path = new_workspace(request.workspace_name)
+    logger.info(f"Workspace created at: {workspace_path}")
+    
     return WorkspaceResponse(
         workspace_path=str(workspace_path),
         message=f"Workspace '{request.workspace_name}' created successfully"
