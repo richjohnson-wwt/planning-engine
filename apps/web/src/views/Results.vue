@@ -46,7 +46,7 @@
       </div>
       
       <!-- Output Files Section -->
-      <div v-if="store.selectedWorkspace && store.selectedState" class="output-files-section">
+      <div v-if="store.workspace && store.stateAbbr" class="output-files-section">
         <h3>Generated Files</h3>
         <div v-if="loadingFiles" class="loading">Loading files...</div>
         <div v-else-if="outputFiles.length > 0" class="files-list">
@@ -145,7 +145,7 @@ onMounted(() => {
   fetchOutputFiles()
 })
 
-watch([() => store.selectedWorkspace, () => store.selectedState], () => {
+watch([() => store.workspace, () => store.stateAbbr], () => {
   fetchOutputFiles()
 })
 
