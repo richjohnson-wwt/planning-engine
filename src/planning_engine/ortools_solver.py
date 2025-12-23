@@ -55,7 +55,7 @@ def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
     if not solution:
         return PlanResult(team_days=[], unassigned=len(request.sites))
 
-    team_days = _convert_solution_to_team_days(solution, sites)
+    team_days = _convert_solution_to_team_days(solution, sites, request.break_minutes)
 
     return PlanResult(team_days=team_days, unassigned=solution.get("unassigned", 0))
 
@@ -94,7 +94,7 @@ def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
 #     return matrix
 
 
-def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[TeamDay]:
+def _convert_solution_to_team_days(solution: dict, sites: List[Site], break_minutes: int = 0) -> List[TeamDay]:
     team_days = []
 
     for route in solution.get("routes", []):
@@ -123,7 +123,8 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site]) -> List[Te
                 sites=route_sites,  # Include full Site objects for mapping
                 total_minutes=total_service,
                 service_minutes=total_service,
-                route_minutes=total_route
+                route_minutes=total_route,
+                break_minutes=break_minutes
             )
             team_days.append(td)
 
@@ -192,9 +193,14 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     # In fast_mode, allow more slack for faster feasibility checks
     slack_max = 30 if request.fast_mode else 0
     time_dimension_name = "Time"
+    
+    # Calculate effective route time: max_route_minutes minus break_minutes
+    # This ensures the solver accounts for break time when planning routes
+    effective_route_minutes = request.max_route_minutes - request.break_minutes
+    
     routing.AddDimension(transit_callback_index,
                          slack_max,  # slack_max: waiting time allowed at each location
-                         request.max_route_minutes,  # capacity: max route duration
+                         effective_route_minutes,  # capacity: max route duration (minus break time)
                          False,  # fix_start_cumul_to_zero: False for flexibility
                          time_dimension_name)
     time_dimension = routing.GetDimensionOrDie(time_dimension_name)

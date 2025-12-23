@@ -228,3 +228,9 @@ Useful commands:
 
     ubuntu@route-planning:/opt/planning-engine/repo$ ls data/workspace/
 foo
+
+### Deploy steps
+
+    ssh route-planning
+   cd /opt/planning-engine/repo
+   sudo bash deploy/update.sh

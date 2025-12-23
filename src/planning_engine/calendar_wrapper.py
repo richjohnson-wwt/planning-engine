@@ -120,7 +120,7 @@ def plan_fixed_crews(request: PlanRequest) -> CalendarPlanResult:
             raise RuntimeError(error_msg)
 
         # Convert solution to TeamDay objects
-        day_team_days = _convert_solution_to_team_days(solution, sites_with_depot)
+        day_team_days = _convert_solution_to_team_days(solution, sites_with_depot, request.break_minutes)
         
         _attach_date(day_team_days, current_date)
         team_days.extend(day_team_days)
@@ -229,7 +229,7 @@ def _validate_calendar_feasibility(
         if not solution or solution.get("unassigned", 0) == len(sites_remaining):
             return False
 
-        day_team_days = _convert_solution_to_team_days(solution, sites_with_depot)
+        day_team_days = _convert_solution_to_team_days(solution, sites_with_depot, request_copy.break_minutes)
         
         _remove_assigned_sites(
             sites_remaining,

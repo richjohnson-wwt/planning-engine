@@ -36,6 +36,9 @@ class TeamDay(BaseModel):
     # Actual route consumption (travel + service + slack)
     route_minutes: int
     
+    # Break time allocated for this team-day
+    break_minutes: int = 0
+    
     # Optional date field for multi-day scheduling
     date: Optional[date] = None
     
