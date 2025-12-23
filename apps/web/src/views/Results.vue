@@ -45,13 +45,37 @@
         <TeamSchedule :teamDays="store.planResult.team_days" />
       </div>
       
+      <!-- Output Files Section -->
+      <div v-if="store.selectedWorkspace && store.selectedState" class="output-files-section">
+        <h3>Generated Files</h3>
+        <div v-if="loadingFiles" class="loading">Loading files...</div>
+        <div v-else-if="outputFiles.length > 0" class="files-list">
+          <div v-for="file in outputFiles" :key="file.filename" class="file-item">
+            <div class="file-info">
+              <span class="file-icon">{{ file.type === 'map' ? '🗺️' : '📄' }}</span>
+              <div class="file-details">
+                <a :href="file.url" target="_blank" class="file-link">
+                  {{ file.filename }}
+                </a>
+                <span class="file-meta">
+                  {{ formatFileSize(file.size) }} • {{ formatTimestamp(file.modified) }}
+                </span>
+              </div>
+            </div>
+            <a :href="file.url" target="_blank" class="btn btn-sm btn-primary">
+              {{ file.type === 'map' ? 'View Map' : 'Download' }}
+            </a>
+          </div>
+        </div>
+        <div v-else class="no-files">
+          <p>No output files generated yet. Run a plan to generate route maps and results.</p>
+        </div>
+      </div>
+
       <!-- Export Options -->
       <div class="export-section">
         <button @click="exportJSON" class="btn btn-secondary">
           Export JSON
-        </button>
-        <button @click="downloadMap" class="btn btn-secondary">
-          Download Map
         </button>
       </div>
     </div>
@@ -59,12 +83,15 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { usePlanningStore } from '../stores/planning'
+import { outputAPI } from '../services/api'
 import RouteMap from '../components/RouteMap.vue'
 import TeamSchedule from '../components/TeamSchedule.vue'
 
 const store = usePlanningStore()
+const outputFiles = ref([])
+const loadingFiles = ref(false)
 
 const totalSites = computed(() => {
   if (!store.planResult?.team_days) return 0
@@ -87,11 +114,48 @@ function exportJSON() {
   URL.revokeObjectURL(url)
 }
 
-function downloadMap() {
-  // Note: Map HTML file is generated server-side
-  // This would need to fetch the map file from the server
-  alert('Map download functionality - to be implemented with server-side map file access')
+async function fetchOutputFiles() {
+  if (!store.selectedWorkspace || !store.selectedState) return
+  
+  loadingFiles.value = true
+  try {
+    const response = await outputAPI.listFiles(store.selectedWorkspace, store.selectedState)
+    outputFiles.value = response.data.files || []
+  } catch (error) {
+    console.error('Error fetching output files:', error)
+    outputFiles.value = []
+  } finally {
+    loadingFiles.value = false
+  }
 }
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp * 1000) // Convert Unix timestamp to milliseconds
+  return date.toLocaleString()
+}
+
+// Fetch output files when component mounts or when workspace/state changes
+onMounted(() => {
+  fetchOutputFiles()
+})
+
+watch([() => store.selectedWorkspace, () => store.selectedState], () => {
+  fetchOutputFiles()
+})
+
+// Refresh output files when a new plan is created
+watch(() => store.planResult, () => {
+  if (store.planResult) {
+    // Wait a moment for the file to be written
+    setTimeout(() => fetchOutputFiles(), 1000)
+  }
+})
 </script>
 
 <style scoped>
@@ -200,5 +264,92 @@ h2 {
 
 .btn-secondary:hover {
   background-color: #4b5563;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.output-files-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.output-files-section h3 {
+  margin-top: 0;
+  color: #1e3a8a;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+}
+
+.no-files {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.file-item:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.file-icon {
+  font-size: 1.5rem;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.file-link {
+  color: #1e3a8a;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.file-link:hover {
+  text-decoration: underline;
+}
+
+.file-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
 }
 </style>

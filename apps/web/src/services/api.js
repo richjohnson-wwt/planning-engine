@@ -77,4 +77,15 @@ export const planningAPI = {
   }
 }
 
+// Output Files API
+export const outputAPI = {
+  listFiles(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/output/${stateAbbr}`)
+  },
+  
+  getFileUrl(workspaceName, stateAbbr, filename) {
+    return `${import.meta.env.VITE_API_URL || '/api'}/workspaces/${workspaceName}/output/${stateAbbr}/${filename}`
+  }
+}
+
 export default api
