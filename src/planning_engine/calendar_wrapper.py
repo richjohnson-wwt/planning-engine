@@ -149,14 +149,20 @@ def plan_fixed_calendar(request: PlanRequest) -> CalendarPlanResult:
         request.holidays,
     )
 
+    # Account for break time when estimating crews
+    effective_route_minutes = request.max_route_minutes - request.break_minutes
+    
     estimated_crews = greedy_estimate_crews(
         sites=request.sites,
         days=planning_days,
-        max_route_minutes=request.max_route_minutes,
+        max_route_minutes=effective_route_minutes,
         service_minutes_per_site=request.service_minutes_per_site,
     )
 
-    MAX_CREW_BUFFER = 5
+    # In fixed calendar mode, we need to find however many crews it takes
+    # to complete all work within the date range. Set a reasonable upper limit
+    # but allow for many more crews than the initial estimate.
+    MAX_CREW_BUFFER = max(50, estimated_crews * 2)
 
     for crews in range(estimated_crews, estimated_crews + MAX_CREW_BUFFER):
         feasible = _validate_calendar_feasibility(
@@ -175,7 +181,10 @@ def plan_fixed_calendar(request: PlanRequest) -> CalendarPlanResult:
             )
 
     raise RuntimeError(
-        "Unable to plan within fixed date range"
+        f"Unable to plan within fixed date range. "
+        f"Tried {estimated_crews} to {estimated_crews + MAX_CREW_BUFFER - 1} crews "
+        f"for {len(request.sites)} sites over {planning_days} working days. "
+        f"Consider: increasing date range, reducing service time, or enabling fast mode."
     )
 
 def _validate_calendar_feasibility(
