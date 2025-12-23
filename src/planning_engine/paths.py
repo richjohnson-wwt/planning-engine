@@ -13,25 +13,12 @@ def get_project_root() -> Path:
     """
     Get the project root directory (where data/ folder lives).
     
-    On Render (or other platforms with read-only filesystems), uses /tmp for data storage.
-    In local development, uses the actual project root.
-    
     Returns:
         Path to the project root directory
         
     Raises:
         RuntimeError: If project root cannot be found
     """
-    import os
-    
-    # Check if running on Render or similar platform (read-only filesystem)
-    # Render sets RENDER=true environment variable
-    if os.environ.get('RENDER') == 'true':
-        # Use /tmp for data storage on Render (only writable location)
-        tmp_root = Path('/tmp/planning-engine')
-        tmp_root.mkdir(parents=True, exist_ok=True)
-        return tmp_root
-    
     # Start from this file's directory (inside src/planning_engine/)
     current = Path(__file__).resolve().parent
     

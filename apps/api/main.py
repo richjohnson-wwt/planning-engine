@@ -25,9 +25,9 @@ app = FastAPI(title="Planning Engine API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://planning-engine-web.onrender.com",
         "http://localhost:5173",  # Local development
         "http://localhost:8080",
+        "*",  # Allow all origins for internal deployment
     ],
     allow_credentials=True,
     allow_methods=["*"],

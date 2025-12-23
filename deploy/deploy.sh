@@ -1,0 +1,125 @@
+#!/bin/bash
+set -e
+
+# Deployment script for Planning Engine on Ubuntu VM
+# Run this script from the repo directory after pulling latest changes
+# Usage: sudo bash deploy/deploy.sh
+
+APP_DIR="/opt/planning-engine"
+DATA_DIR="/var/lib/planning-engine"
+USER="planning-engine"
+VENV_DIR="$APP_DIR/venv"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+echo "=========================================="
+echo "Planning Engine - Deployment"
+echo "=========================================="
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+    echo "ERROR: Please run as root (use sudo)"
+    exit 1
+fi
+
+# Verify we're in the repo directory
+if [ ! -f "$REPO_DIR/pyproject.toml" ]; then
+    echo "ERROR: Must run from planning-engine repository directory"
+    exit 1
+fi
+
+echo "✓ Deploying from: $REPO_DIR"
+
+# Stop services before updating
+echo "✓ Stopping services..."
+systemctl stop planning-engine-api || true
+systemctl stop planning-engine-web || true
+
+# Sync repository files to app directory
+echo "✓ Syncing application files..."
+rsync -av --delete \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='venv' \
+    --exclude='__pycache__' \
+    --exclude='.pytest_cache' \
+    --exclude='dist' \
+    --exclude='data' \
+    "$REPO_DIR/" "$APP_DIR/"
+
+# Ensure data directory exists and is linked
+mkdir -p "$DATA_DIR/workspace"
+ln -sf "$DATA_DIR" "$APP_DIR/data"
+
+# Set ownership
+chown -R "$USER:$USER" "$APP_DIR"
+chown -R "$USER:$USER" "$DATA_DIR"
+
+# Setup Python virtual environment
+echo "✓ Setting up Python virtual environment..."
+if [ ! -d "$VENV_DIR" ]; then
+    sudo -u "$USER" python3 -m venv "$VENV_DIR"
+fi
+
+# Install/update Python dependencies
+echo "✓ Installing Python dependencies..."
+sudo -u "$USER" "$VENV_DIR/bin/pip" install --upgrade pip
+sudo -u "$USER" "$VENV_DIR/bin/pip" install -e "$APP_DIR"
+
+# Build Vue.js frontend
+echo "✓ Building Vue.js frontend..."
+cd "$APP_DIR/apps/web"
+sudo -u "$USER" npm install
+sudo -u "$USER" npm run build
+
+# Install systemd service files
+echo "✓ Installing systemd services..."
+cp "$APP_DIR/deploy/systemd/planning-engine-api.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/systemd/planning-engine-web.service" /etc/systemd/system/
+
+# Install nginx configuration
+echo "✓ Installing nginx configuration..."
+cp "$APP_DIR/deploy/nginx/planning-engine.conf" /etc/nginx/sites-available/planning-engine
+ln -sf /etc/nginx/sites-available/planning-engine /etc/nginx/sites-enabled/planning-engine
+
+# Test nginx configuration
+echo "✓ Testing nginx configuration..."
+nginx -t
+
+# Reload systemd and restart services
+echo "✓ Restarting services..."
+systemctl daemon-reload
+systemctl enable planning-engine-api
+systemctl enable planning-engine-web
+systemctl restart planning-engine-api
+systemctl restart planning-engine-web
+systemctl reload nginx
+
+# Wait a moment for services to start
+sleep 2
+
+# Check service status
+echo ""
+echo "=========================================="
+echo "Service Status"
+echo "=========================================="
+systemctl status planning-engine-api --no-pager || true
+echo ""
+systemctl status planning-engine-web --no-pager || true
+
+echo ""
+echo "=========================================="
+echo "Deployment completed successfully!"
+echo "=========================================="
+echo ""
+echo "Access the application:"
+echo "  Web Interface: http://YOUR_VM_IP/"
+echo "  API Docs: http://YOUR_VM_IP/api/docs"
+echo ""
+echo "Useful commands:"
+echo "  Check API status:  sudo systemctl status planning-engine-api"
+echo "  Check Web status:  sudo systemctl status planning-engine-web"
+echo "  View API logs:     sudo journalctl -u planning-engine-api -f"
+echo "  View Web logs:     sudo journalctl -u planning-engine-web -f"
+echo "  Restart API:       sudo systemctl restart planning-engine-api"
+echo "  Restart Web:       sudo systemctl restart planning-engine-web"
+echo ""

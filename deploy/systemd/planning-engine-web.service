@@ -1,0 +1,21 @@
+[Unit]
+Description=Planning Engine Web Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=planning-engine
+Group=planning-engine
+WorkingDirectory=/opt/planning-engine/apps/web
+Environment="PATH=/usr/bin:/usr/local/bin"
+ExecStart=/usr/bin/npx vite preview --host 0.0.0.0 --port 3000
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=planning-engine-web
+
+[Install]
+WantedBy=multi-user.target
