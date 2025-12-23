@@ -5,13 +5,14 @@ from .calendar_wrapper import plan_fixed_calendar, plan_fixed_crews
 from .paths import get_workspace_path
 
 
-def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None) -> List[Site]:
+def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = None, service_minutes_per_site: int = 60) -> List[Site]:
     """
     Load sites from workspace's state-specific geocoded.csv file.
     
     Args:
         workspace_name: Name of the workspace
         state_abbr: State abbreviation to load sites for (e.g., "LA", "NC"). Required.
+        service_minutes_per_site: Service time in minutes to assign to each site (default: 60)
         
     Returns:
         List of Site objects
@@ -69,7 +70,7 @@ def _load_sites_from_workspace(workspace_name: str, state_abbr: Optional[str] = 
             lat=float(row['lat']),
             lon=float(row['lon']),
             address=full_address,
-            service_minutes=60  # Default service time
+            service_minutes=service_minutes_per_site
         )
         sites.append(site)
     
@@ -92,7 +93,11 @@ def plan(request: PlanRequest) -> PlanResult:
     
     # Load sites from geocoded.csv if not provided
     if request.sites is None:
-        request.sites = _load_sites_from_workspace(request.workspace, request.state_abbr)
+        request.sites = _load_sites_from_workspace(
+            request.workspace, 
+            request.state_abbr,
+            request.service_minutes_per_site
+        )
     
     # Validate we have sites to plan
     if not request.sites:
