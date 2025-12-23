@@ -34,7 +34,15 @@ def parse_excel_to_csv(
     """
     # Read Excel file with openpyxl engine
     # If sheet_name is None, pandas will read the first sheet by default
-    df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
+    result = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
+    
+    # Handle case where result is a dict (when sheet_name is specified)
+    # In some pandas versions, specifying sheet_name returns a dict
+    if isinstance(result, dict):
+        # Get the first (and should be only) sheet
+        df = list(result.values())[0]
+    else:
+        df = result
     
     # If column mapping is specified, validate and rename columns
     if column_mapping is not None:
