@@ -6,9 +6,9 @@ After=network.target
 Type=simple
 User=planning-engine
 Group=planning-engine
-WorkingDirectory=/opt/planning-engine
+WorkingDirectory=/opt/planning-engine/repo
 Environment="PATH=/opt/planning-engine/venv/bin"
-Environment="PYTHONPATH=/opt/planning-engine/src"
+Environment="PYTHONPATH=/opt/planning-engine/repo/src"
 ExecStart=/opt/planning-engine/venv/bin/uvicorn apps.api.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10

@@ -29,29 +29,29 @@ fi
 
 echo "✓ Deploying from: $REPO_DIR"
 
+# Check if repo is at the expected location
+if [ "$REPO_DIR" = "$APP_DIR/repo" ]; then
+    echo "✓ Deploying from cloned repository at $APP_DIR/repo"
+    # No need to sync, we'll work directly from the repo
+    WORK_DIR="$APP_DIR/repo"
+else
+    echo "ERROR: Script must be run from $APP_DIR/repo"
+    exit 1
+fi
+
 # Stop services before updating
 echo "✓ Stopping services..."
 systemctl stop planning-engine-api || true
 systemctl stop planning-engine-web || true
 
-# Sync repository files to app directory
-echo "✓ Syncing application files..."
-rsync -av --delete \
-    --exclude='.git' \
-    --exclude='node_modules' \
-    --exclude='venv' \
-    --exclude='__pycache__' \
-    --exclude='.pytest_cache' \
-    --exclude='dist' \
-    --exclude='data' \
-    "$REPO_DIR/" "$APP_DIR/"
-
 # Ensure data directory exists and is linked
 mkdir -p "$DATA_DIR/workspace"
-ln -sf "$DATA_DIR" "$APP_DIR/data"
+if [ ! -L "$WORK_DIR/data" ]; then
+    ln -sf "$DATA_DIR" "$WORK_DIR/data"
+fi
 
 # Set ownership
-chown -R "$USER:$USER" "$APP_DIR"
+chown -R "$USER:$USER" "$WORK_DIR"
 chown -R "$USER:$USER" "$DATA_DIR"
 
 # Setup Python virtual environment
@@ -63,22 +63,22 @@ fi
 # Install/update Python dependencies
 echo "✓ Installing Python dependencies..."
 sudo -u "$USER" "$VENV_DIR/bin/pip" install --upgrade pip
-sudo -u "$USER" "$VENV_DIR/bin/pip" install -e "$APP_DIR"
+sudo -u "$USER" "$VENV_DIR/bin/pip" install -e "$WORK_DIR"
 
 # Build Vue.js frontend
 echo "✓ Building Vue.js frontend..."
-cd "$APP_DIR/apps/web"
+cd "$WORK_DIR/apps/web"
 sudo -u "$USER" npm install
 sudo -u "$USER" npm run build
 
 # Install systemd service files
 echo "✓ Installing systemd services..."
-cp "$APP_DIR/deploy/systemd/planning-engine-api.service" /etc/systemd/system/
-cp "$APP_DIR/deploy/systemd/planning-engine-web.service" /etc/systemd/system/
+cp "$WORK_DIR/deploy/systemd/planning-engine-api.service" /etc/systemd/system/
+cp "$WORK_DIR/deploy/systemd/planning-engine-web.service" /etc/systemd/system/
 
 # Install nginx configuration
 echo "✓ Installing nginx configuration..."
-cp "$APP_DIR/deploy/nginx/planning-engine.conf" /etc/nginx/sites-available/planning-engine
+cp "$WORK_DIR/deploy/nginx/planning-engine.conf" /etc/nginx/sites-available/planning-engine
 ln -sf /etc/nginx/sites-available/planning-engine /etc/nginx/sites-enabled/planning-engine
 
 # Test nginx configuration

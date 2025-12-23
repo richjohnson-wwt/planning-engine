@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=planning-engine
 Group=planning-engine
-WorkingDirectory=/opt/planning-engine/apps/web
+WorkingDirectory=/opt/planning-engine/repo/apps/web
 Environment="PATH=/usr/bin:/usr/local/bin"
 ExecStart=/usr/bin/npx vite preview --host 0.0.0.0 --port 3000
 Restart=always
