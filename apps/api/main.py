@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
 from planning_engine.models import PlanRequest, PlanResult
 from planning_engine.paths import get_project_root
@@ -19,6 +20,19 @@ logging.basicConfig(
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.type_adapter")
 
 app = FastAPI(title="Planning Engine API")
+
+# Add CORS middleware to allow requests from the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://planning-engine-web.onrender.com",
+        "http://localhost:5173",  # Local development
+        "http://localhost:8080",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class WorkspaceRequest(BaseModel):
