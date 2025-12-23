@@ -201,3 +201,30 @@ sudo rm -rf /var/lib/planning-engine
 # Remove user
 sudo userdel planning-engine
 ```
+
+### Output from console on deploy:
+
+```
+==========================================
+Deployment completed successfully!
+==========================================
+
+Access the application:
+  Web Interface: http://10.254.181.18/
+  API Docs: http://10.254.181.18/api/docs
+
+Useful commands:
+  Check API status:  sudo systemctl status planning-engine-api
+  Check Web status:  sudo systemctl status planning-engine-web
+  View API logs:     sudo journalctl -u planning-engine-api -f
+  View Web logs:     sudo journalctl -u planning-engine-web -f
+  Restart API:       sudo systemctl restart planning-engine-api
+  Restart Web:       sudo systemctl restart planning-engine-web
+```
+
+    http://10.254.181.18:3000/
+
+    ubuntu@route-planning:/opt/planning-engine/repo$
+
+    ubuntu@route-planning:/opt/planning-engine/repo$ ls data/workspace/
+foo

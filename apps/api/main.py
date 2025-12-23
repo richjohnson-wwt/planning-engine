@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
 from planning_engine.models import PlanRequest, PlanResult
 from planning_engine.paths import get_project_root
@@ -378,3 +380,64 @@ def run_plan(request: PlanRequest):
             print(f"⚠ Warning: Could not generate map: {e}")
     
     return result
+
+
+@app.get("/workspaces/{workspace_name}/output/{state_abbr}/{filename}")
+def get_output_file(workspace_name: str, state_abbr: str, filename: str):
+    """
+    Serve output files (HTML maps, JSON results) from workspace output directory.
+    
+    Example: GET /workspaces/foo/output/LA/route_map_20231223_120000.html
+    """
+    import os
+    
+    # Construct the file path
+    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    file_path = output_dir / filename
+    
+    # Security check: ensure the resolved path is within the output directory
+    try:
+        file_path = file_path.resolve()
+        output_dir = output_dir.resolve()
+        if not str(file_path).startswith(str(output_dir)):
+            return {"error": "Invalid file path"}
+    except Exception as e:
+        return {"error": f"Invalid path: {str(e)}"}
+    
+    # Check if file exists
+    if not file_path.exists():
+        return {"error": f"File not found: {filename}"}
+    
+    # Determine media type based on extension
+    media_type = "text/html" if filename.endswith(".html") else "application/json"
+    
+    return FileResponse(file_path, media_type=media_type)
+
+
+@app.get("/workspaces/{workspace_name}/output/{state_abbr}")
+def list_output_files(workspace_name: str, state_abbr: str):
+    """
+    List all output files for a workspace and state.
+    
+    Returns a list of available HTML maps and JSON result files.
+    """
+    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    
+    if not output_dir.exists():
+        return {"files": []}
+    
+    files = []
+    for file_path in output_dir.iterdir():
+        if file_path.is_file() and file_path.suffix in [".html", ".json"]:
+            files.append({
+                "filename": file_path.name,
+                "type": "map" if file_path.suffix == ".html" else "result",
+                "size": file_path.stat().st_size,
+                "modified": file_path.stat().st_mtime,
+                "url": f"/api/workspaces/{workspace_name}/output/{state_abbr}/{file_path.name}"
+            })
+    
+    # Sort by modified time, newest first
+    files.sort(key=lambda x: x["modified"], reverse=True)
+    
+    return {"files": files}
