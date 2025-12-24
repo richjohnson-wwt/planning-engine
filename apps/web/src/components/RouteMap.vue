@@ -4,40 +4,38 @@
       <p>No route data available to display on map.</p>
     </div>
     
-    <div v-else class="map-container">
-      <p class="map-note">
-        <strong>Note:</strong> Interactive map is auto-generated server-side as 
-        <code>route_map_{timestamp}.html</code> in the workspace output folder.
-      </p>
-      
-      <!-- Placeholder for map iframe or integration -->
+    <div v-else-if="!mapUrl" class="map-container">
       <div class="map-placeholder">
         <p>🗺️ Map Visualization</p>
         <p class="small">
-          The Folium map is generated automatically and saved alongside the JSON results.
-          To view: Open the <code>route_map_*.html</code> file from your workspace output folder.
+          No map file found. The map is generated automatically when you run a plan.
         </p>
       </div>
+    </div>
+    
+    <div v-else class="map-container">
+      <div class="map-controls">
+        <span class="map-label">📍 Interactive Route Map</span>
+        <a :href="mapUrl" target="_blank" class="btn-open-new">Open in New Tab ↗</a>
+      </div>
       
-      <!-- Future: Could embed the map here via iframe if served statically -->
-      <!-- <iframe v-if="mapUrl" :src="mapUrl" class="map-iframe"></iframe> -->
+      <!-- Embedded interactive map -->
+      <iframe :src="mapUrl" class="map-iframe" title="Route Map"></iframe>
     </div>
   </div>
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   result: {
     type: Object,
     required: true
+  },
+  mapUrl: {
+    type: String,
+    default: null
   }
 })
-
-// Future enhancement: Add mapUrl prop to load the generated HTML map
-// const mapUrl = computed(() => {
-//   // Construct URL to the generated map file
-//   return `/maps/${workspace}/${state}/route_map_${timestamp}.html`
-// })
 </script>
 
 <style scoped>
@@ -56,22 +54,39 @@ defineProps({
 .map-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0;
 }
 
-.map-note {
-  padding: 1rem;
-  background: #dbeafe;
-  border-left: 4px solid #1e3a8a;
+.map-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+
+.map-label {
+  font-weight: 500;
+  color: #1e3a8a;
+  font-size: 0.95rem;
+}
+
+.btn-open-new {
+  padding: 0.5rem 1rem;
+  background: #1e3a8a;
+  color: white;
+  text-decoration: none;
   border-radius: 4px;
-  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.2s;
 }
 
-.map-note code {
-  background: rgba(0,0,0,0.1);
-  padding: 0.2rem 0.4rem;
-  border-radius: 3px;
-  font-family: monospace;
+.btn-open-new:hover {
+  background: #1e40af;
 }
 
 .map-placeholder {
@@ -96,11 +111,11 @@ defineProps({
   font-size: 0.9rem;
 }
 
-/* Future: For iframe embedding */
 .map-iframe {
   width: 100%;
   height: 600px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 0 0 6px 6px;
+  border-top: none;
 }
 </style>

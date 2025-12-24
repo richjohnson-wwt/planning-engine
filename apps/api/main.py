@@ -382,6 +382,46 @@ def run_plan(request: PlanRequest):
     return result
 
 
+@app.get("/workspaces/{workspace_name}/output/{state_abbr}/latest")
+def get_latest_result(workspace_name: str, state_abbr: str):
+    """
+    Get the latest planning result JSON for a workspace and state.
+    
+    Returns the most recent route_plan_*.json file with metadata and results.
+    
+    NOTE: This route must be defined BEFORE the /{filename} route to avoid
+    FastAPI matching "latest" as a filename.
+    """
+    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    
+    if not output_dir.exists():
+        return {"error": "No results found", "result": None}
+    
+    # Find all JSON result files
+    json_files = [
+        f for f in output_dir.iterdir()
+        if f.is_file() and f.name.startswith("route_plan_") and f.suffix == ".json"
+    ]
+    
+    if not json_files:
+        return {"error": "No results found", "result": None}
+    
+    # Get the most recent file by modification time
+    latest_file = max(json_files, key=lambda f: f.stat().st_mtime)
+    
+    try:
+        with open(latest_file, 'r') as f:
+            data = json.load(f)
+        
+        # Return both metadata and result
+        return {
+            "metadata": data.get("metadata", {}),
+            "result": data.get("result", {})
+        }
+    except Exception as e:
+        return {"error": f"Failed to load result: {str(e)}", "result": None}
+
+
 @app.get("/workspaces/{workspace_name}/output/{state_abbr}/{filename}")
 def get_output_file(workspace_name: str, state_abbr: str, filename: str):
     """

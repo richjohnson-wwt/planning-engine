@@ -36,7 +36,7 @@
       <!-- Route Map -->
       <div class="map-section">
         <h3>Route Map</h3>
-        <RouteMap :result="store.planResult" />
+        <RouteMap :result="store.planResult" :mapUrl="latestMapUrl" />
       </div>
       
       <!-- Team Schedule -->
@@ -85,13 +85,14 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import { usePlanningStore } from '../stores/planning'
-import { outputAPI } from '../services/api'
+import { outputAPI, workspaceAPI } from '../services/api'
 import RouteMap from '../components/RouteMap.vue'
 import TeamSchedule from '../components/TeamSchedule.vue'
 
 const store = usePlanningStore()
 const outputFiles = ref([])
 const loadingFiles = ref(false)
+const loadingResult = ref(false)
 
 const totalSites = computed(() => {
   if (!store.planResult?.team_days) return 0
@@ -107,6 +108,16 @@ const stateFromResult = computed(() => {
   return store.planRequest?.state_abbr || store.stateAbbr
 })
 
+const latestMapUrl = computed(() => {
+  if (!outputFiles.value || outputFiles.value.length === 0) {
+    return null
+  }
+  
+  // Find the most recent map file (files are already sorted by modified time, newest first)
+  const latestMap = outputFiles.value.find(file => file.type === 'map')
+  return latestMap ? latestMap.url : null
+})
+
 function formatDate(dateStr) {
   if (!dateStr) return 'N/A'
   return new Date(dateStr).toLocaleDateString()
@@ -118,7 +129,7 @@ function exportJSON() {
   const url = URL.createObjectURL(dataBlob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `route_plan_${new Date().toISOString().split('T')[0]}.json`
+  link.download = `route_plan_${new Date().toISOString()}.json`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -127,10 +138,8 @@ async function fetchOutputFiles() {
   const workspace = workspaceFromResult.value
   const state = stateFromResult.value
   
-  console.log('fetchOutputFiles called', { workspace, state })
-  
   if (!workspace || !state) {
-    console.log('Missing workspace or state, skipping fetch')
+    console.log('Workspace or state not set, skipping file fetch')
     return
   }
   
@@ -149,6 +158,73 @@ async function fetchOutputFiles() {
   }
 }
 
+async function loadLatestResult() {
+  const workspace = workspaceFromResult.value
+  const state = stateFromResult.value
+  
+  // Check for empty strings as well as falsy values
+  if (!workspace || workspace.trim() === '' || !state || state.trim() === '') {
+    console.log('Workspace or state not set, skipping result load', { workspace, state })
+    return
+  }
+  
+  loadingResult.value = true
+  try {
+    console.log(`Loading latest result for: ${workspace}/${state}`)
+    const response = await outputAPI.getLatestResult(workspace, state)
+    
+    if (response.data.result && !response.data.error) {
+      // Update store with the loaded result and metadata
+      store.setPlanResult(response.data.result)
+      
+      // Also update planRequest with metadata if available
+      if (response.data.metadata) {
+        store.updatePlanRequest({
+          workspace: response.data.metadata.workspace,
+          state_abbr: response.data.metadata.state_abbr,
+          use_clusters: response.data.metadata.use_clusters,
+          max_route_minutes: response.data.metadata.max_route_minutes,
+          service_minutes_per_site: response.data.metadata.service_minutes_per_site
+        })
+      }
+      
+      console.log('Latest result loaded successfully')
+    } else {
+      console.log('No previous results found', response.data)
+    }
+  } catch (error) {
+    console.error('Error loading latest result:', error)
+  } finally {
+    loadingResult.value = false
+  }
+}
+
+async function autoSelectFirstState() {
+  // If workspace is set but state is not, auto-select the first state
+  const hasWorkspace = store.workspace && store.workspace.trim() !== ''
+  const hasState = store.stateAbbr && store.stateAbbr.trim() !== ''
+  
+  console.log('autoSelectFirstState check:', { hasWorkspace, hasState, workspace: store.workspace, state: store.stateAbbr })
+  
+  if (hasWorkspace && !hasState) {
+    try {
+      console.log(`Fetching states for workspace: ${store.workspace}`)
+      const response = await workspaceAPI.getStates(store.workspace)
+      const states = response.data.states || []
+      
+      console.log(`Found ${states.length} states:`, states)
+      
+      if (states.length > 0) {
+        const firstState = states[0].state_abbr
+        console.log(`Auto-selecting first state: ${firstState}`)
+        store.setStateAbbr(firstState)
+      }
+    } catch (error) {
+      console.error('Error fetching states for auto-select:', error)
+    }
+  }
+}
+
 function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -160,13 +236,58 @@ function formatTimestamp(timestamp) {
   return date.toLocaleString()
 }
 
-// Fetch output files when component mounts or when workspace/state changes
-onMounted(() => {
-  fetchOutputFiles()
+// On mount, auto-select first state if needed, then load results
+onMounted(async () => {
+  console.log('Results page mounted')
+  console.log('Store workspace:', store.workspace)
+  console.log('Store stateAbbr:', store.stateAbbr)
+  
+  // If we already have both workspace and state (from localStorage), load results immediately
+  if (store.workspace && store.stateAbbr) {
+    console.log('Loading results for existing workspace/state')
+    await loadLatestResult()
+    await fetchOutputFiles()
+  } else {
+    // Otherwise, try to auto-select first state
+    console.log('Auto-selecting first state')
+    await autoSelectFirstState()
+    // After auto-select, load results if we now have both
+    if (store.workspace && store.stateAbbr) {
+      await loadLatestResult()
+      await fetchOutputFiles()
+    }
+  }
 })
 
-watch([workspaceFromResult, stateFromResult], () => {
-  fetchOutputFiles()
+// Watch for workspace changes - auto-select first state and load results
+watch(() => store.workspace, async (newWorkspace, oldWorkspace) => {
+  console.log('Workspace changed:', oldWorkspace, '->', newWorkspace)
+  if (newWorkspace) {
+    await autoSelectFirstState()
+    if (store.stateAbbr) {
+      await loadLatestResult()
+      await fetchOutputFiles()
+    }
+  }
+})
+
+// Watch for state changes - load results for the new state
+watch(() => store.stateAbbr, async (newState, oldState) => {
+  console.log('State changed:', oldState, '->', newState)
+  if (newState && store.workspace) {
+    await loadLatestResult()
+    await fetchOutputFiles()
+  }
+})
+
+// Refresh output files and results when workspace/state from result changes
+watch([workspaceFromResult, stateFromResult], async ([newWorkspace, newState], [oldWorkspace, oldState]) => {
+  console.log('workspaceFromResult or stateFromResult changed')
+  // Only reload if values actually changed and both are present
+  if ((newWorkspace !== oldWorkspace || newState !== oldState) && newWorkspace && newState) {
+    await loadLatestResult()
+    await fetchOutputFiles()
+  }
 })
 
 // Refresh output files when a new plan is created
@@ -184,9 +305,65 @@ watch(() => store.planResult, () => {
   margin: 0 auto;
 }
 
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
 h2 {
   color: #1e3a8a;
-  margin-bottom: 2rem;
+  margin: 0;
+}
+
+.selector-group {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.selector label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.select-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #1f2937;
+  font-size: 0.9rem;
+  min-width: 180px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.select-input:hover:not(:disabled) {
+  border-color: #1e3a8a;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #1e3a8a;
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.select-input:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .no-results {

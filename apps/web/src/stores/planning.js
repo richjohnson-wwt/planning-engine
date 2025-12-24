@@ -1,13 +1,44 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+
+// Helper functions for localStorage
+const STORAGE_KEY_WORKSPACE = 'planning_workspace'
+const STORAGE_KEY_STATE = 'planning_state'
+
+function loadFromStorage(key, defaultValue = '') {
+  try {
+    const value = localStorage.getItem(key)
+    return value !== null ? value : defaultValue
+  } catch (e) {
+    console.warn('Failed to load from localStorage:', e)
+    return defaultValue
+  }
+}
+
+function saveToStorage(key, value) {
+  try {
+    if (value) {
+      localStorage.setItem(key, value)
+    } else {
+      localStorage.removeItem(key)
+    }
+  } catch (e) {
+    console.warn('Failed to save to localStorage:', e)
+  }
+}
 
 export const usePlanningStore = defineStore('planning', () => {
-  // State
-  const workspace = ref('')
-  const stateAbbr = ref('')
+  // State - initialize from localStorage
+  const workspace = ref(loadFromStorage(STORAGE_KEY_WORKSPACE))
+  const stateAbbr = ref(loadFromStorage(STORAGE_KEY_STATE))
+  
+  console.log('Planning store initialized')
+  console.log('Loaded workspace from localStorage:', workspace.value)
+  console.log('Loaded stateAbbr from localStorage:', stateAbbr.value)
+  
   const planRequest = ref({
-    workspace: '',
-    state_abbr: '',
+    workspace: workspace.value,
+    state_abbr: stateAbbr.value,
     use_clusters: false,
     team_config: {
       teams: 2,
@@ -28,6 +59,15 @@ export const usePlanningStore = defineStore('planning', () => {
   const planResult = ref(null)
   const loading = ref(false)
   const error = ref(null)
+
+  // Watch for changes and persist to localStorage
+  watch(workspace, (newValue) => {
+    saveToStorage(STORAGE_KEY_WORKSPACE, newValue)
+  })
+
+  watch(stateAbbr, (newValue) => {
+    saveToStorage(STORAGE_KEY_STATE, newValue)
+  })
 
   // Actions
   function setWorkspace(name) {
@@ -61,6 +101,9 @@ export const usePlanningStore = defineStore('planning', () => {
     stateAbbr.value = ''
     planResult.value = null
     error.value = null
+    // Clear localStorage when resetting
+    saveToStorage(STORAGE_KEY_WORKSPACE, '')
+    saveToStorage(STORAGE_KEY_STATE, '')
   }
 
   return {

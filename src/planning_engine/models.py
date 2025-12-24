@@ -33,6 +33,9 @@ class TeamDay(BaseModel):
     # Pure labor time
     service_minutes: int
 
+    # Pure travel time (driving between sites)
+    travel_minutes: int
+
     # Actual route consumption (travel + service + slack)
     route_minutes: int
     

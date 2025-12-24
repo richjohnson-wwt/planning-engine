@@ -19,12 +19,7 @@
       </div>
       
       <div class="step">
-        <h3>4. Cluster (Optional)</h3>
-        <p>Group sites by geographic proximity</p>
-      </div>
-      
-      <div class="step">
-        <h3>5. Plan Routes</h3>
+        <h3>4. Plan Routes</h3>
         <p>Generate optimized routes for your teams</p>
       </div>
     </div>

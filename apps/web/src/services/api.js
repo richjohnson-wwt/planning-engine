@@ -85,6 +85,10 @@ export const outputAPI = {
   
   getFileUrl(workspaceName, stateAbbr, filename) {
     return `${import.meta.env.VITE_API_URL || '/api'}/workspaces/${workspaceName}/output/${stateAbbr}/${filename}`
+  },
+  
+  getLatestResult(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/output/${stateAbbr}/latest`)
   }
 }
 
