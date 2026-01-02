@@ -1,7 +1,7 @@
 # src/scripts/test_solver_smoke.py
 from datetime import time
 from planning_engine.models import Site, TeamConfig, Workday, PlanRequest
-from planning_engine.ortools_solver import plan_single_day_vrp
+from planning_engine.solver.ortools_solver import plan_single_day_vrp
 
 def main():
     # --- 1. Small, deterministic dataset ---

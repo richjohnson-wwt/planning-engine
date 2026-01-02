@@ -1,6 +1,6 @@
 from datetime import date, time
 
-from planning_engine.calendar_wrapper import plan_fixed_crews
+from planning_engine.planning.crew_planner import plan_fixed_crews
 from planning_engine.models import PlanRequest, Site, TeamConfig, Workday
 
 def make_sites(n: int) -> list[Site]:

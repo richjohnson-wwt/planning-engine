@@ -51,10 +51,35 @@ def get_workspace_path(workspace_name: str) -> Path:
     """
     Get the path to a workspace directory.
     
+    Sanitizes the workspace name to prevent path traversal attacks.
+    
     Args:
         workspace_name: Name of the workspace
         
     Returns:
         Path to the workspace directory
+        
+    Raises:
+        ValueError: If workspace name is empty or invalid
     """
-    return get_project_root() / "data" / "workspace" / workspace_name
+    import re
+    
+    # Validate workspace name is not empty
+    if not workspace_name or not workspace_name.strip():
+        raise ValueError("Workspace name cannot be empty")
+    
+    # Remove any path separators and dangerous characters
+    # Only allow alphanumeric, underscore, and hyphen (remove dots and slashes entirely)
+    sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '', workspace_name)
+    
+    # Remove leading/trailing underscores and hyphens
+    sanitized = sanitized.strip('_-')
+    
+    # Validate the sanitized name is not empty
+    if not sanitized:
+        raise ValueError(
+            f"Invalid workspace name: '{workspace_name}'. "
+            "Workspace names must contain at least one alphanumeric character."
+        )
+    
+    return get_project_root() / "data" / "workspace" / sanitized

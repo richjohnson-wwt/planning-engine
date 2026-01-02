@@ -1,8 +1,12 @@
 """
-Integration test to verify the fixed crew + clusters bug is fixed.
+Test to verify that fixed calendar planning with clusters assigns sequential team IDs.
 
-This test creates a minimal workspace with clustered sites and runs
-the actual planning code to verify team IDs are correct.
+When using fixed calendar mode (start_date + end_date specified), the system calculates
+how many crews are needed. With clusters, each cluster is planned independently, which
+previously resulted in duplicate team IDs (e.g., cluster 0: teams 1-3, cluster 1: teams 1-3).
+
+This test verifies that team IDs are renumbered sequentially (1, 2, 3, 4, 5, 6...) across
+all clusters, not offset by 100s or duplicated.
 """
 
 from datetime import date, time
@@ -16,14 +20,13 @@ from planning_engine.models import PlanRequest, TeamConfig, Workday
 from planning_engine.paths import get_workspace_path
 
 
-def test_fixed_crew_with_clusters_integration():
+def test_fixed_calendar_with_clusters_sequential_teams():
     """
-    Integration test: Create workspace, cluster sites, and plan with fixed crews.
-    Verify that team IDs remain consistent (1-N) across all clusters.
+    Test that fixed calendar planning with clusters assigns sequential team IDs.
     """
     
     # Create a temporary workspace
-    workspace_name = "test_cluster_fix"
+    workspace_name = "test_fixed_calendar_teams"
     
     try:
         # Clean up if it exists
@@ -35,12 +38,11 @@ def test_fixed_crew_with_clusters_integration():
         new_workspace(workspace_name)
         
         # Create test data with sites in two geographic clusters
-        # Cluster 1: Chicago area (lat ~41.8, lon ~-87.9)
-        # Cluster 2: Bloomington area (lat ~40.5, lon ~-88.9)
+        # Each cluster should need ~2-3 crews to complete in one day
         sites_data = []
         
-        # Chicago cluster (30 sites)
-        for i in range(30):
+        # Cluster 1: Chicago area (40 sites - needs multiple crews)
+        for i in range(40):
             sites_data.append({
                 'site_id': f'CHI-{i}',
                 'street1': f'{100 + i} N Michigan Ave',
@@ -51,8 +53,8 @@ def test_fixed_crew_with_clusters_integration():
                 'lon': -87.9 + i * 0.01,
             })
         
-        # Bloomington cluster (30 sites)
-        for i in range(30):
+        # Cluster 2: Bloomington area (40 sites - needs multiple crews)
+        for i in range(40):
             sites_data.append({
                 'site_id': f'BLM-{i}',
                 'street1': f'{200 + i} E Washington St',
@@ -82,26 +84,27 @@ def test_fixed_crew_with_clusters_integration():
         num_clusters = clustered_df['cluster_id'].nunique()
         print(f"✓ Created {num_clusters} clusters")
         
-        # Now run planning with fixed crew and clusters
+        # Now run FIXED CALENDAR planning (system calculates crews needed)
         request = PlanRequest(
             workspace=workspace_name,
             sites=[],  # Will be loaded from clustered.csv
             team_config=TeamConfig(
-                teams=6,
+                teams=1,  # This will be ignored - system calculates crews needed
                 workday=Workday(start=time(8, 0), end=time(17, 0))
             ),
             state_abbr="IL",
             use_clusters=True,
             start_date=date(2026, 3, 2),
+            end_date=date(2026, 3, 2),  # Single day - forces multiple crews
             max_route_minutes=480,
             service_minutes_per_site=60,
             fast_mode=True
         )
         
-        print(f"\n=== Running Fixed Crew Planning with Clusters ===")
-        print(f"Fixed crew size: {request.team_config.teams}")
-        print(f"Start date: {request.start_date}")
+        print(f"\n=== Running Fixed Calendar Planning with Clusters ===")
+        print(f"Date range: {request.start_date} to {request.end_date}")
         print(f"Using clusters: {request.use_clusters}")
+        print(f"System will calculate crews needed...")
         
         result = plan(request)
         
@@ -117,8 +120,6 @@ def test_fixed_crew_with_clusters_integration():
         print(f"\n=== Test Assertions ===")
         
         # Test 1: Team IDs should be sequential starting from 1
-        # In fixed crew mode with clusters, each cluster gets offset teams
-        # So we expect sequential IDs across all clusters (1, 2, 3, ... N)
         expected_teams = set(range(1, len(all_team_ids) + 1))
         actual_teams = set(all_team_ids)
         
@@ -127,11 +128,10 @@ def test_fixed_crew_with_clusters_integration():
         print(f"✅ PASS: Team IDs are sequential (1-{len(all_team_ids)})")
         
         # Test 2: No cluster-offset team IDs (>= 100)
-        # The old bug used offsets of 100, 200, etc. We now use smaller offsets
         cluster_offset_teams = [tid for tid in all_team_ids if tid >= 100]
         assert not cluster_offset_teams, \
-            f"❌ FAIL: Found large cluster-offset team IDs: {cluster_offset_teams}"
-        print(f"✅ PASS: No large cluster-offset team IDs (>= 100) found")
+            f"❌ FAIL: Found cluster-offset team IDs: {cluster_offset_teams}"
+        print(f"✅ PASS: No cluster-offset team IDs found")
         
         # Test 3: No gaps in team ID sequence
         for i in range(1, len(all_team_ids)):
@@ -139,19 +139,24 @@ def test_fixed_crew_with_clusters_integration():
                 f"❌ FAIL: Gap in team ID sequence between {all_team_ids[i-1]} and {all_team_ids[i]}"
         print(f"✅ PASS: No gaps in team ID sequence")
         
-        # Test 4: Each date should have unique team IDs (no duplicates)
+        # Test 4: Multiple teams were calculated (not just 1)
+        assert len(all_team_ids) > 1, \
+            f"❌ FAIL: Only {len(all_team_ids)} team(s) calculated, expected multiple"
+        print(f"✅ PASS: System calculated {len(all_team_ids)} crews needed")
+        
+        # Test 5: All team IDs on a given date should be unique
         from collections import defaultdict
         teams_by_date = defaultdict(set)
         for td in result.team_days:
             teams_by_date[td.date].add(td.team_id)
         
-        for date_val, teams in sorted(teams_by_date.items()):
+        for date_val, teams in teams_by_date.items():
             team_list = sorted(teams)
             assert len(team_list) == len(set(team_list)), \
                 f"❌ FAIL: Duplicate team IDs on {date_val}: {team_list}"
-        print(f"✅ PASS: All {len(teams_by_date)} dates have unique team IDs")
+        print(f"✅ PASS: No duplicate team IDs on any date")
         
-        print(f"\n🎉 All tests passed! Bug is fixed.")
+        print(f"\n🎉 All tests passed! Team IDs are sequential: {all_team_ids}")
         return True
         
     finally:
@@ -164,7 +169,7 @@ def test_fixed_crew_with_clusters_integration():
 
 if __name__ == "__main__":
     try:
-        success = test_fixed_crew_with_clusters_integration()
+        success = test_fixed_calendar_with_clusters_sequential_teams()
         exit(0 if success else 1)
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")

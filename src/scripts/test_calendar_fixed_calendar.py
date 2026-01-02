@@ -1,6 +1,6 @@
 from datetime import date, time
 
-from planning_engine.calendar_wrapper import plan_fixed_calendar
+from planning_engine.planning.calendar_planner import plan_fixed_calendar
 from planning_engine.models import PlanRequest, Site, TeamConfig, Workday
 
 

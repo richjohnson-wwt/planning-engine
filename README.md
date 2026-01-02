@@ -22,6 +22,7 @@ Custom Parameters:
     
     cd apps/api
     uvicorn main:app --reload
+    uvicorn main:app --reload --reload-dir . --reload-dir ../../src
 
     cd apps/web
     npm run dev

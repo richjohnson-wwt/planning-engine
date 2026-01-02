@@ -145,7 +145,7 @@ def list_workspaces():
 
 @app.get("/workspaces/{workspace_name}/states")
 def list_workspace_states(workspace_name: str):
-    """List all state subdirectories with detailed information (site count, geocode status)"""
+    """List all state subdirectories with detailed information (site count, geocode status, cluster count)"""
     import pandas as pd
     
     workspace_path = get_project_root() / "data" / "workspace" / workspace_name
@@ -166,6 +166,7 @@ def list_workspace_states(workspace_name: str):
         state_name = state_dir.name
         addresses_csv = state_dir / "addresses.csv"
         geocoded_csv = cache_dir / state_name / "geocoded.csv"
+        clustered_csv = cache_dir / state_name / "clustered.csv"
         
         # Count sites from addresses.csv
         site_count = 0
@@ -179,10 +180,21 @@ def list_workspace_states(workspace_name: str):
         # Check if geocoded
         geocoded = geocoded_csv.exists()
         
+        # Get cluster count from clustered.csv
+        cluster_count = None
+        if clustered_csv.exists():
+            try:
+                df = pd.read_csv(clustered_csv)
+                if 'cluster_id' in df.columns:
+                    cluster_count = df['cluster_id'].nunique()
+            except Exception:
+                cluster_count = None
+        
         states_info.append({
             "name": state_name,
             "site_count": site_count,
-            "geocoded": geocoded
+            "geocoded": geocoded,
+            "cluster_count": cluster_count
         })
     
     return {"states": states_info}

@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta, time
 from planning_engine.models import Site, PlanRequest, TeamConfig, Workday
-from planning_engine.ortools_solver import plan_single_day_vrp
+from planning_engine.solver.ortools_solver import plan_single_day_vrp
 
 def make_sites(num_sites: int):
     """Generate synthetic sites in a city grid for testing."""

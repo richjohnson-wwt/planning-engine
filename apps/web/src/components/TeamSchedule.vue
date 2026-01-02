@@ -59,7 +59,11 @@ const selectedTeamDay = ref(null)
 
 function formatDate(dateStr) {
   if (!dateStr) return 'Not scheduled'
-  return new Date(dateStr).toLocaleDateString()
+  // Parse date string directly to avoid timezone conversion issues
+  // Date strings from backend are in YYYY-MM-DD format
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // month is 0-indexed
+  return date.toLocaleDateString()
 }
 
 function selectTeamDay(td) {

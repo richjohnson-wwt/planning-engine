@@ -1,6 +1,6 @@
 from datetime import date, time
 from planning_engine.models import Site, Workday, TeamConfig, PlanRequest
-from planning_engine.ortools_solver import plan_single_day_vrp
+from planning_engine.solver.ortools_solver import plan_single_day_vrp
 
 # This will immediately surface:
 

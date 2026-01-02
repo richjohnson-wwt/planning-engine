@@ -1,66 +1,31 @@
-# ortools_solver.py (patched)
+"""OR-Tools VRP solver for route optimization."""
 
 from datetime import date, datetime, timedelta
 from typing import List, Optional
-from math import radians, sin, cos, sqrt, atan2
-
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
-from .models import Site, PlanRequest, PlanResult, TeamDay
-from ._internal.utils import calculate_distance_matrix
+from ..models import Site, PlanRequest, TeamDay
 
-DEPOT_INDEX = 0  # synthetic depot index
+DEPOT_INDEX = 0  # Virtual depot index (centroid, not physical location)
 
-def plan_single_day_vrp(request: PlanRequest) -> PlanResult:
-    """Plan single-day vehicle routes using OR-Tools VRP solver.
-    
-    Optimizes routes for one day given a set of sites and crew constraints.
-    Does NOT schedule across multiple days - each call optimizes one day.
+
+def _convert_solution_to_team_days(
+    solution: dict,
+    sites: List[Site],
+    break_minutes: int = 0
+) -> List[TeamDay]:
+    """
+    Convert OR-Tools solution to TeamDay objects.
     
     Args:
-        request: Planning request with sites, crew config, and constraints
+        solution: Solution dict from OR-Tools solver
+        sites: List of sites including depot at index 0
+        break_minutes: Break time in minutes to add to each route
         
     Returns:
-        PlanResult with optimized routes for one day
+        List of TeamDay objects
     """
-    # Create synthetic depot at centroid of real sites
-    if request.sites:
-        avg_lat = sum(s.lat for s in request.sites) / len(request.sites)
-        avg_lon = sum(s.lon for s in request.sites) / len(request.sites)
-    else:
-        avg_lat, avg_lon = 0.0, 0.0
-    
-    depot_site = Site(
-        id="DEPOT",
-        name="DEPOT",
-        lat=avg_lat,
-        lon=avg_lon,
-        service_minutes=0,
-        index=0
-    )
-
-    # Prepend depot to sites list
-    sites = [depot_site] + request.sites
-
-    # Assign indices to all sites
-    for idx, site in enumerate(sites):
-        site.index = idx
-        assert site.index is not None
-
-    distance_matrix_minutes = calculate_distance_matrix(sites)
-
-    solution = solve_single_day_vrptw(sites, request, distance_matrix_minutes)
-
-    if not solution:
-        return PlanResult(team_days=[], unassigned=len(request.sites))
-
-    team_days = _convert_solution_to_team_days(solution, sites, request.break_minutes)
-
-    return PlanResult(team_days=team_days, unassigned=solution.get("unassigned", 0))
-
-
-def _convert_solution_to_team_days(solution: dict, sites: List[Site], break_minutes: int = 0) -> List[TeamDay]:
     team_days = []
 
     for route in solution.get("routes", []):
@@ -68,18 +33,18 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site], break_minu
         visits = route["visits"]
 
         site_ids = []
-        route_sites = []  # Collect full Site objects
+        route_sites = []
         total_service = 0
         total_travel = 0
         total_route = 0
 
         for visit in visits:
-            if visit["site"] == "DEPOT":
-                continue  # skip synthetic depot
+            if visit["site"] == "Virtual Depot (Centroid)":
+                continue  # Skip virtual depot
             site = next((s for s in sites if s.name == visit["site"]), None)
             if site:
                 site_ids.append(site.id)
-                route_sites.append(site)  # Add full Site object
+                route_sites.append(site)
                 total_service += site.service_minutes
                 travel_min = visit.get("travel_minutes", 0)
                 total_travel += travel_min
@@ -89,7 +54,7 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site], break_minu
             td = TeamDay(
                 team_id=crew_id + 1,
                 site_ids=site_ids,
-                sites=route_sites,  # Include full Site objects for mapping
+                sites=route_sites,
                 total_minutes=total_service,
                 service_minutes=total_service,
                 travel_minutes=total_travel,
@@ -102,6 +67,7 @@ def _convert_solution_to_team_days(solution: dict, sites: List[Site], break_minu
 
 
 def _create_data_model(sites: List[Site], travel_time_matrix: List[List[int]]) -> dict:
+    """Create data model for OR-Tools solver."""
     return {
         "distance_matrix": travel_time_matrix,
         "num_locations": len(sites),
@@ -109,13 +75,18 @@ def _create_data_model(sites: List[Site], travel_time_matrix: List[List[int]]) -
     }
 
 
-def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_matrix_minutes: List[List[int]]) -> Optional[dict]:
-    """Solve single-day Vehicle Routing Problem with Time Windows using OR-Tools.
+def solve_single_day_vrptw(
+    sites: List[Site],
+    request: PlanRequest,
+    distance_matrix_minutes: List[List[int]]
+) -> Optional[dict]:
+    """
+    Solve single-day Vehicle Routing Problem with Time Windows using OR-Tools.
     
     This is a single-day optimizer - it does not schedule across multiple days.
     
     Args:
-        sites: List of sites including synthetic depot at index 0
+        sites: List of sites including virtual depot at index 0
         request: Planning request with constraints
         distance_matrix_minutes: Travel time matrix including service times
         
@@ -140,11 +111,11 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     data = _create_data_model(sites, distance_matrix_minutes)
 
     service_time = request.service_minutes_per_site
-    time_per_site = service_time + 15  # assume 15 min avg travel
+    time_per_site = service_time + 15  # Assume 15 min avg travel
     max_sites_per_vehicle = max(1, int(request.max_route_minutes / time_per_site))
     estimated_vehicles = max(1, (len(sites) + max_sites_per_vehicle - 1) // max_sites_per_vehicle)
 
-    # Use team_config.teams for number of vehicles (fixed-crews mode)
+    # Use team_config.teams for number of vehicles
     num_vehicles = min(estimated_vehicles, request.get_num_crews())
 
     manager = pywrapcp.RoutingIndexManager(data["num_locations"], num_vehicles, data["depot"])
@@ -158,31 +129,26 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
     # Add time dimension
-    # Parameters: callback, slack_max, capacity, fix_start_cumul_to_zero, name
-    # fix_start_cumul_to_zero=False allows vehicles to start at different times
-    # In fast_mode, allow more slack for faster feasibility checks
     slack_max = 30 if request.fast_mode else 0
     time_dimension_name = "Time"
     
     # Calculate effective route time: max_route_minutes minus break_minutes
-    # This ensures the solver accounts for break time when planning routes
     effective_route_minutes = request.max_route_minutes - request.break_minutes
     
-    routing.AddDimension(transit_callback_index,
-                         slack_max,  # slack_max: waiting time allowed at each location
-                         effective_route_minutes,  # capacity: max route duration (minus break time)
-                         False,  # fix_start_cumul_to_zero: False for flexibility
-                         time_dimension_name)
+    routing.AddDimension(
+        transit_callback_index,
+        slack_max,  # Waiting time allowed at each location
+        effective_route_minutes,  # Max route duration (minus break time)
+        False,  # Don't fix start cumul to zero for flexibility
+        time_dimension_name
+    )
     time_dimension = routing.GetDimensionOrDie(time_dimension_name)
 
     # Set time window for depot: must start at time 0
     depot_index = manager.NodeToIndex(DEPOT_INDEX)
     time_dimension.CumulVar(depot_index).SetRange(0, 0)
-    
-    # Other sites don't need explicit time windows - the dimension capacity
-    # (max_route_minutes) already constrains the total route duration
 
-    # --- PATCHED: disjunctions to allow skipping sites ---
+    # Add disjunctions to allow skipping sites if needed
     PENALTY = 10_000
     for site in sites:
         if site.index == DEPOT_INDEX:
@@ -220,7 +186,8 @@ def solve_single_day_vrptw(sites: List[Site], request: PlanRequest, distance_mat
 
 
 def _extract_solution(routing, manager, solution, sites, start_date, time_dimension):
-    """Extract solution from OR-Tools routing model.
+    """
+    Extract solution from OR-Tools routing model.
     
     Note: The distance matrix includes service time at destination, so we need to
     subtract service time to get pure travel time for reporting purposes.
@@ -264,7 +231,6 @@ def _extract_solution(routing, manager, solution, sites, start_date, time_dimens
             routes.append({"crew_id": vehicle_id, "visits": route})
 
     # Calculate unassigned sites (excluding depot from count)
-    # total_sites includes depot visits, so we need to subtract depot from both counts
     unassigned = (len(sites) - 1) - (total_sites - used_vehicles)
     return {
         "routes": routes,
@@ -272,3 +238,75 @@ def _extract_solution(routing, manager, solution, sites, start_date, time_dimens
         "total_sites_scheduled": total_sites - used_vehicles,  # Exclude depot visits
         "unassigned": unassigned
     }
+
+
+def solve_vrptw(request: PlanRequest) -> dict:
+    """
+    Solve VRPTW for a single day using the provided request.
+    
+    This is a convenience wrapper that prepares sites with depot and calls
+    the solver. For multi-day planning, call this function once per day.
+    
+    Args:
+        request: Planning request with sites and constraints
+        
+    Returns:
+        Solution dict with routes
+    """
+    from ..core.depot import create_virtual_depot
+    from .solver_utils import prepare_sites_with_indices, calculate_distance_matrix
+    
+    if not request.sites:
+        return {
+            "routes": [],
+            "used_crews": 0,
+            "total_sites_scheduled": 0,
+            "unassigned": 0
+        }
+    
+    # Create virtual depot and prepare sites
+    depot = create_virtual_depot(request.sites)
+    sites_with_depot = prepare_sites_with_indices(request.sites, depot)
+    
+    # Calculate distance matrix
+    distance_matrix = calculate_distance_matrix(sites_with_depot)
+    
+    # Solve
+    return solve_single_day_vrptw(sites_with_depot, request, distance_matrix)
+
+
+def plan_single_day_vrp(request: PlanRequest):
+    """
+    Legacy wrapper for backward compatibility with test scripts.
+    
+    Plan single-day vehicle routes using OR-Tools VRP solver.
+    
+    Args:
+        request: Planning request with sites, crew config, and constraints
+        
+    Returns:
+        PlanResult with optimized routes for one day
+    """
+    from ..models import PlanResult
+    from ..core.depot import create_virtual_depot
+    from .solver_utils import prepare_sites_with_indices, calculate_distance_matrix
+    
+    if not request.sites:
+        return PlanResult(team_days=[], unassigned=0)
+    
+    # Create virtual depot and prepare sites
+    depot = create_virtual_depot(request.sites)
+    sites_with_depot = prepare_sites_with_indices(request.sites, depot)
+    
+    # Calculate distance matrix
+    distance_matrix = calculate_distance_matrix(sites_with_depot)
+    
+    # Solve
+    solution = solve_single_day_vrptw(sites_with_depot, request, distance_matrix)
+    
+    if not solution:
+        return PlanResult(team_days=[], unassigned=len(request.sites))
+    
+    team_days = _convert_solution_to_team_days(solution, sites_with_depot, request.break_minutes)
+    
+    return PlanResult(team_days=team_days, unassigned=solution.get("unassigned", 0))

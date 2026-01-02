@@ -47,6 +47,7 @@
                 <th class="col-select">Select</th>
                 <th class="col-state">State</th>
                 <th class="col-sites">Sites</th>
+                <th class="col-clusters">Clusters</th>
                 <th class="col-geocode">Geocode</th>
               </tr>
             </thead>
@@ -70,6 +71,7 @@
                   <label :for="`state-${state.name}`">{{ state.name }}</label>
                 </td>
                 <td class="col-sites">{{ state.site_count }}</td>
+                <td class="col-clusters">{{ state.cluster_count !== null && state.cluster_count !== undefined ? state.cluster_count : '-' }}</td>
                 <td class="col-geocode">
                   <button
                     v-if="!state.geocoded"
@@ -498,6 +500,13 @@ h2 {
 }
 
 .col-sites {
+  width: 100px;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.col-clusters {
   width: 100px;
   text-align: center;
   color: #6b7280;
