@@ -232,10 +232,11 @@ def _plan_with_clusters(request: PlanRequest) -> PlanResult:
             if overall_end_date is None or cluster_result.end_date > overall_end_date:
                 overall_end_date = cluster_result.end_date
         
-        # Adjust team IDs to be unique across clusters
-        # Cluster 0: teams 1-N, Cluster 1: teams 101-10N, etc.
-        for td in cluster_result.team_days:
-            td.team_id = td.team_id + (cluster_id * 100)
+        # NOTE: We do NOT adjust team IDs in fixed crew mode
+        # In fixed crew mode (plan_fixed_calendar/plan_fixed_crews), the same physical
+        # teams (1-N) work across all clusters and dates. Team ID offsets (cluster_id * 100)
+        # are only appropriate for "team-days" mode where each cluster gets independent
+        # virtual teams. Since we're using calendar-based planning here, teams remain consistent.
         
         all_team_days.extend(cluster_result.team_days)
         print(f"    ✓ Cluster {cluster_id}: {len(cluster_result.team_days)} team-days scheduled")
