@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from planning_engine import plan, new_workspace, parse_excel, geocode, cluster
+from planning_engine import plan, new_workspace, parse_excel, geocode, cluster, get_cluster_info
 from planning_engine.models import PlanRequest, PlanResult
 from planning_engine.paths import get_project_root
 from pydantic import BaseModel
@@ -312,6 +312,25 @@ def cluster_sites(request: ClusterRequest):
         sites_clustered=sites_count,
         num_clusters=num_clusters
     )
+
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/cluster-info")
+def get_cluster_info_endpoint(workspace_name: str, state_abbr: str):
+    """
+    Get cluster information for a workspace and state.
+    
+    Returns cluster count, total sites, and cluster size distribution.
+    Used by the UI to determine appropriate team count constraints.
+    """
+    cluster_info = get_cluster_info(workspace_name, state_abbr)
+    
+    if cluster_info is None:
+        return {
+            "error": "Failed to retrieve cluster information",
+            "clustered_file_exists": False
+        }
+    
+    return cluster_info
 
 
 @app.post("/plan", response_model=PlanResult)

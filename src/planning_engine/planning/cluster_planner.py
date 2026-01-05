@@ -135,13 +135,44 @@ def _renumber_team_ids(team_days: List, is_calendar_mode: bool) -> None:
     """
     Renumber team IDs to avoid duplicates across clusters.
     
-    - Calendar Mode: Each team-day gets a unique ID (teams are independent)
+    - Calendar Mode with Clustering: Renumber per cluster (clusters work in parallel)
+    - Calendar Mode without Clustering: Each team-day gets unique ID
     - Crew Mode: Teams maintain their IDs across dates (same team works multiple days)
     """
     if is_calendar_mode:
-        # Calendar mode: Each team-day is independent, just renumber sequentially
-        for idx, td in enumerate(team_days, start=1):
-            td.team_id = idx
+        # Check if we have cluster information
+        has_clusters = any(hasattr(td, '_cluster_id') for td in team_days)
+        
+        if has_clusters:
+            # Calendar mode with clustering: Renumber per cluster
+            # Clusters work in parallel in different geographic areas
+            # Within each cluster, the same team can work multiple days
+            from collections import defaultdict
+            
+            cluster_teams = defaultdict(list)
+            for td in team_days:
+                cluster_id = td._cluster_id if hasattr(td, '_cluster_id') else 0
+                cluster_teams[cluster_id].append(td)
+            
+            # Renumber each cluster independently starting from 1
+            for cluster_id, cluster_team_days in cluster_teams.items():
+                # Sort by date and original team_id for consistent ordering
+                cluster_team_days.sort(key=lambda td: (td.date or "", td.team_id))
+                
+                # Map original team IDs to new team IDs within this cluster
+                team_id_map = {}
+                next_team_id = 1
+                
+                for td in cluster_team_days:
+                    original_team_id = td.team_id
+                    if original_team_id not in team_id_map:
+                        team_id_map[original_team_id] = next_team_id
+                        next_team_id += 1
+                    td.team_id = team_id_map[original_team_id]
+        else:
+            # Calendar mode without clustering: Each team-day is independent
+            for idx, td in enumerate(team_days, start=1):
+                td.team_id = idx
     else:
         # Crew mode: Group by cluster and date, then renumber
         # This ensures the same "team" within a cluster keeps the same ID across days
@@ -152,10 +183,10 @@ def _renumber_team_ids(team_days: List, is_calendar_mode: bool) -> None:
         next_global_team_id = 1
         
         # Sort by date to ensure consistent ordering
-        team_days.sort(key=lambda td: (td.date or "", td._cluster_id, td.team_id))
+        team_days.sort(key=lambda td: (td.date or "", td._cluster_id if hasattr(td, '_cluster_id') else 0, td.team_id))
         
         for td in team_days:
-            cluster_id = td._cluster_id
+            cluster_id = td._cluster_id if hasattr(td, '_cluster_id') else 0
             original_team_id = td.team_id
             
             # Create a unique key for this team within its cluster
@@ -167,7 +198,8 @@ def _renumber_team_ids(team_days: List, is_calendar_mode: bool) -> None:
             
             td.team_id = cluster_team_map[key]
     
-    # Clean up temporary cluster_id attribute
+    # Convert temporary _cluster_id to permanent cluster_id for UI display
     for td in team_days:
         if hasattr(td, '_cluster_id'):
+            td.cluster_id = td._cluster_id
             delattr(td, '_cluster_id')

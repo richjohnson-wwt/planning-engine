@@ -3,6 +3,8 @@ Visualization utilities for route planning results.
 """
 
 import folium
+import html
+import json
 from pathlib import Path
 from typing import List
 from .models import PlanResult, TeamDay, Site
@@ -70,35 +72,50 @@ def generate_folium_map(result: PlanResult, output_path: Path) -> Path:
         route_coords = [[site.lat, site.lon] for site in team_day.sites]
         
         if len(route_coords) > 1:
+            # Simple text for route popup
+            route_popup = f"Team {team_id} - {team_day.date if team_day.date else 'No date'}"
             folium.PolyLine(
                 route_coords,
                 color=color,
                 weight=3,
                 opacity=0.7,
-                popup=f"Team {team_id} - {team_day.date if team_day.date else 'No date'}"
+                popup=route_popup
             ).add_to(m)
         
         # Add numbered markers for each site in visit order
         for idx, site in enumerate(team_day.sites, 1):
-            # Build popup content
+            # Sanitize backticks and other JS-breaking chars, then HTML escape
+            # Backticks break JS template literals when Folium embeds content
+            safe_name = html.escape(site.name.replace('`', "'"))
+            safe_address = html.escape(site.address.replace('`', "'")) if site.address else 'No address'
+            safe_date = str(team_day.date) if team_day.date else 'Not scheduled'
+            
+            # Build popup content with HTML-escaped data
             popup_html = f"""
             <div style="font-family: Arial; min-width: 200px;">
                 <h4 style="margin: 0 0 10px 0; color: {color};">Stop #{idx}</h4>
-                <b>{site.name}</b><br>
-                {site.address if site.address else 'No address'}<br>
+                <b>{safe_name}</b><br>
+                {safe_address}<br>
                 <hr style="margin: 10px 0;">
                 <b>Team:</b> {team_id}<br>
-                <b>Date:</b> {team_day.date if team_day.date else 'Not scheduled'}<br>
+                <b>Date:</b> {safe_date}<br>
                 <b>Service Time:</b> {site.service_minutes} min<br>
                 <b>Coordinates:</b> {site.lat:.4f}, {site.lon:.4f}
             </div>
             """
             
+            # Use IFrame for popup to handle escaping properly
+            iframe = folium.IFrame(popup_html, width=300, height=200)
+            popup = folium.Popup(iframe, max_width=300)
+            
             # Create marker with number icon
+            # Sanitize backticks in tooltip (they break JS template literals)
+            sanitized_name = site.name.replace('`', "'")
+            tooltip_text = f"Team {team_id} - Stop {idx}: {sanitized_name}"
             folium.Marker(
                 location=[site.lat, site.lon],
-                popup=folium.Popup(popup_html, max_width=300),
-                tooltip=f"Team {team_id} - Stop {idx}: {site.name}",
+                popup=popup,
+                tooltip=tooltip_text,
                 icon=folium.Icon(
                     color=color,
                     icon='info-sign',

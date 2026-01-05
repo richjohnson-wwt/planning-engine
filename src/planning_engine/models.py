@@ -45,6 +45,9 @@ class TeamDay(BaseModel):
     # Optional date field for multi-day scheduling
     date: Optional[date] = None
     
+    # Optional cluster ID for clustered planning (for UI display)
+    cluster_id: Optional[int] = None
+    
     model_config = {
         "json_schema_serialization_defaults_required": True
     }

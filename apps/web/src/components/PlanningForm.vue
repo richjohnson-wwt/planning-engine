@@ -1,44 +1,6 @@
 <template>
   <div class="planning-form">
     <form @submit.prevent="handleSubmit">
-      <!-- Team Configuration -->
-      <div class="form-section">
-        <h4>Team Configuration</h4>
-        
-        <div class="form-group">
-          <label for="teams">Number of Teams</label>
-          <input
-            id="teams"
-            v-model.number="formData.team_config.teams"
-            type="number"
-            min="1"
-            class="form-control"
-          />
-        </div>
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label for="workday-start">Workday Start</label>
-            <input
-              id="workday-start"
-              v-model="formData.team_config.workday.start"
-              type="time"
-              class="form-control"
-            />
-          </div>
-          
-          <div class="form-group">
-            <label for="workday-end">Workday End</label>
-            <input
-              id="workday-end"
-              v-model="formData.team_config.workday.end"
-              type="time"
-              class="form-control"
-            />
-          </div>
-        </div>
-      </div>
-      
       <!-- Date Configuration -->
       <div class="form-section">
         <h4>Planning Dates</h4>
@@ -129,30 +91,166 @@
             <input type="checkbox" v-model="formData.use_clusters" />
             Use Clustering
           </label>
+          <p v-if="clusterInfo?.clustered_file_exists && !formData.use_clusters" class="warning-text">
+            ⚠️ Clustering is available ({{ clusterInfo.cluster_count }} clusters, {{ clusterInfo.total_sites }} sites).
+            Disabling clustering may cause planning failures for geographically dispersed sites.
+          </p>
+          <p v-if="clusterInfo?.clustered_file_exists && formData.use_clusters" class="info-text">
+            ✓ Using {{ clusterInfo.cluster_count }} clusters for {{ clusterInfo.total_sites }} sites
+          </p>
         </div>
       </div>
       
-      <button type="submit" class="btn btn-primary btn-large">
-        Generate Plan
+      <!-- Team Configuration -->
+      <div class="form-section">
+        <h4>Team Configuration</h4>
+        
+        <div v-if="!isTeamsOutput" class="form-group">
+          <label for="teams">
+            Number of Teams
+            <span v-if="isTeamsLocked" class="locked-label">🔒 Locked</span>
+          </label>
+          <input
+            id="teams"
+            v-model.number="formData.team_config.teams"
+            type="number"
+            min="1"
+            class="form-control"
+            :disabled="isTeamsLocked"
+            :class="{ 'locked-field': isTeamsLocked }"
+          />
+          <p class="help-text">{{ teamsHelpText }}</p>
+        </div>
+        
+        <div v-else class="form-group">
+          <label>Number of Teams</label>
+          <p class="output-text">Will be calculated based on date range</p>
+          <p class="help-text">{{ teamsHelpText }}</p>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="workday-start">Workday Start</label>
+            <input
+              id="workday-start"
+              v-model="formData.team_config.workday.start"
+              type="time"
+              class="form-control"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="workday-end">Workday End</label>
+            <input
+              id="workday-end"
+              v-model="formData.team_config.workday.end"
+              type="time"
+              class="form-control"
+            />
+          </div>
+        </div>
+      </div>
+      
+      <button type="submit" class="btn btn-primary btn-large" :disabled="isLoading">
+        <span v-if="!isLoading">Generate Plan</span>
+        <span v-else>Generating Plan...</span>
       </button>
     </form>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { usePlanningStore } from '../stores/planning'
+import axios from 'axios'
+
+const props = defineProps({
+  isLoading: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const emit = defineEmits(['submit'])
 const store = usePlanningStore()
 
 const planningMode = ref('fixed-crew')
 const formData = ref({ ...store.planRequest })
+const clusterInfo = ref(null)
+const loadingClusterInfo = ref(false)
+
+// Computed property to determine if teams field should be locked
+const isTeamsLocked = computed(() => {
+  return formData.value.use_clusters && 
+         planningMode.value === 'fixed-crew' && 
+         clusterInfo.value?.clustered_file_exists
+})
+
+// Computed property to determine if teams field should be hidden (output only)
+const isTeamsOutput = computed(() => {
+  return planningMode.value === 'fixed-calendar'
+})
+
+// Computed property for teams field help text
+const teamsHelpText = computed(() => {
+  if (isTeamsLocked.value) {
+    return `Locked to cluster count (${clusterInfo.value.cluster_count} clusters detected)`
+  }
+  if (isTeamsOutput.value) {
+    return 'System will calculate the minimum crews needed for the date range'
+  }
+  return 'Number of crews/teams available to work'
+})
+
+// Fetch cluster info when clustering is enabled and workspace/state are set
+async function fetchClusterInfo() {
+  if (!formData.value.workspace || !formData.value.state_abbr) {
+    return
+  }
+  
+  loadingClusterInfo.value = true
+  try {
+    const response = await axios.get(
+      `/api/workspaces/${formData.value.workspace}/states/${formData.value.state_abbr}/cluster-info`
+    )
+    clusterInfo.value = response.data
+    
+    // If teams should be locked, set it to cluster count
+    if (isTeamsLocked.value) {
+      formData.value.team_config.teams = clusterInfo.value.cluster_count
+    }
+  } catch (error) {
+    console.error('Failed to fetch cluster info:', error)
+    clusterInfo.value = null
+  } finally {
+    loadingClusterInfo.value = false
+  }
+}
+
+// Watch for changes that should trigger cluster info fetch
+watch([
+  () => formData.value.use_clusters,
+  () => formData.value.workspace,
+  () => formData.value.state_abbr
+], () => {
+  if (formData.value.use_clusters) {
+    fetchClusterInfo()
+  } else {
+    clusterInfo.value = null
+  }
+}, { immediate: true })
 
 // Watch planning mode to clear end_date when switching to fixed-crew
 watch(planningMode, (newMode) => {
   if (newMode === 'fixed-crew') {
     formData.value.end_date = null
+  }
+})
+
+// Watch for cluster lock changes to update teams
+watch(isTeamsLocked, (locked) => {
+  if (locked && clusterInfo.value) {
+    formData.value.team_config.teams = clusterInfo.value.cluster_count
   }
 })
 
@@ -258,6 +356,52 @@ input[type="radio"] {
   font-weight: 600;
 }
 
+.locked-label {
+  font-size: 0.8rem;
+  color: #f59e0b;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.locked-field {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.output-text {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  color: #0369a1;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.warning-text {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background-color: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.info-text {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background-color: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 4px;
+  color: #065f46;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
 .btn {
   padding: 0.75rem 1.5rem;
   border: none;
@@ -274,6 +418,16 @@ input[type="radio"] {
 
 .btn-primary:hover {
   background-color: #1e40af;
+}
+
+.btn-primary:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary:disabled:hover {
+  background-color: #9ca3af;
 }
 
 .btn-large {

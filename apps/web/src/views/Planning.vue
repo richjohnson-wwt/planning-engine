@@ -94,7 +94,7 @@
       <!-- Planning Configuration -->
       <div class="config-section">
         <h3>Planning Configuration</h3>
-        <PlanningForm @submit="handlePlanSubmit" />
+        <PlanningForm @submit="handlePlanSubmit" :is-loading="store.loading" />
       </div>
     </div>
     
@@ -271,23 +271,33 @@ function updateState() {
 
 async function handlePlanSubmit() {
   try {
+    console.log('handlePlanSubmit: Starting plan submission')
+    
     // Validate that a state is selected
     if (!store.stateAbbr || store.stateAbbr.trim() === '') {
       store.setError('Please select a state from the table above before planning routes.')
       return
     }
     
+    console.log('handlePlanSubmit: Setting loading to true')
     store.setLoading(true)
     store.setError(null)
     
+    console.log('handlePlanSubmit: Calling planningAPI.plan')
     const response = await planningAPI.plan(store.planRequest)
+    console.log('handlePlanSubmit: Plan API response received', response.data)
+    
     store.setPlanResult(response.data)
+    console.log('handlePlanSubmit: Plan result stored, navigating to results')
     
     // Navigate to results page
-    router.push('/results')
+    await router.push('/results')
+    console.log('handlePlanSubmit: Navigation complete')
   } catch (err) {
+    console.error('handlePlanSubmit: Error occurred', err)
     store.setError(err.response?.data?.detail || err.message)
   } finally {
+    console.log('handlePlanSubmit: Setting loading to false')
     store.setLoading(false)
   }
 }

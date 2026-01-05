@@ -141,11 +141,30 @@ def plan_fixed_calendar(request: PlanRequest) -> CalendarPlanResult:
             # Import here to avoid circular dependency
             from .crew_planner import plan_fixed_crews
             
-            return plan_fixed_crews(
-                request.model_copy(
-                    update={"team_config": updated_team_config}
+            try:
+                # Try to plan with this crew count
+                result = plan_fixed_crews(
+                    request.model_copy(
+                        update={"team_config": updated_team_config}
+                    )
                 )
-            )
+                
+                # Verify all sites were scheduled within the date range
+                if result.unassigned == 0 and result.end_date <= request.end_date:
+                    return result
+                    
+                # If not all sites scheduled or exceeded date range, try more crews
+                continue
+                
+            except RuntimeError as e:
+                # If planning failed with this crew count, try more crews
+                # Only raise if we've exhausted all crew options
+                if crews >= estimated_crews + MAX_CREW_BUFFER - 1:
+                    raise RuntimeError(
+                        f"Unable to plan within fixed date range even with {crews} crews. "
+                        f"Original error: {str(e)}"
+                    )
+                continue
 
     raise RuntimeError(
         f"Unable to plan within fixed date range. "
