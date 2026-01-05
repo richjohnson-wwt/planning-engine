@@ -14,7 +14,7 @@
         </p>
         <div class="cluster-details">
           <span v-for="cluster in clusterSummary.clusters" :key="cluster.id" class="cluster-badge">
-            Cluster {{ cluster.id }}: {{ cluster.crews }} crew{{ cluster.crews > 1 ? 's' : '' }}
+            Cluster {{ cluster.id + 1 }}: {{ cluster.crews }} crew{{ cluster.crews > 1 ? 's' : '' }}
           </span>
         </div>
       </div>
@@ -32,8 +32,8 @@
         </thead>
         <tbody>
           <tr v-for="(td, index) in teamDays" :key="index">
-            <td v-if="hasClusters" class="cluster-id">{{ td.cluster_id !== null && td.cluster_id !== undefined ? td.cluster_id : '-' }}</td>
-            <td class="team-id">Team {{ td.team_id }}</td>
+            <td v-if="hasClusters" class="cluster-id">{{ td.cluster_id !== null && td.cluster_id !== undefined ? td.cluster_id + 1 : '-' }}</td>
+            <td class="team-id">{{ td.team_label || `Team ${td.team_id}` }}</td>
             <td>{{ formatDate(td.date) }}</td>
             <td>{{ td.site_ids?.length || 0 }} sites</td>
             <td>{{ td.service_minutes }} min</td>

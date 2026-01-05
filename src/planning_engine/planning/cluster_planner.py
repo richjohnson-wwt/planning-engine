@@ -199,7 +199,14 @@ def _renumber_team_ids(team_days: List, is_calendar_mode: bool) -> None:
             td.team_id = cluster_team_map[key]
     
     # Convert temporary _cluster_id to permanent cluster_id for UI display
+    # Also generate team_label with 1-based cluster numbering for better UX
     for td in team_days:
         if hasattr(td, '_cluster_id'):
             td.cluster_id = td._cluster_id
+            # Generate team label with 1-based cluster numbering (C1, C2, C3...)
+            # cluster_id is 0-based internally, so add 1 for display
+            td.team_label = f"C{td._cluster_id + 1}-T{td.team_id}"
             delattr(td, '_cluster_id')
+        else:
+            # No clustering, just use team ID
+            td.team_label = f"T{td.team_id}"
