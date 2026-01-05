@@ -145,7 +145,7 @@ def list_workspaces():
 
 @app.get("/workspaces/{workspace_name}/states")
 def list_workspace_states(workspace_name: str):
-    """List all state subdirectories with detailed information (site count, geocode status, cluster count)"""
+    """List all state subdirectories with detailed information (site count, geocode status, cluster count, error count)"""
     import pandas as pd
     
     workspace_path = get_project_root() / "data" / "workspace" / workspace_name
@@ -166,6 +166,7 @@ def list_workspace_states(workspace_name: str):
         state_name = state_dir.name
         addresses_csv = state_dir / "addresses.csv"
         geocoded_csv = cache_dir / state_name / "geocoded.csv"
+        geocoded_errors_csv = cache_dir / state_name / "geocoded-errors.csv"
         clustered_csv = cache_dir / state_name / "clustered.csv"
         
         # Count sites from addresses.csv
@@ -177,8 +178,18 @@ def list_workspace_states(workspace_name: str):
             except Exception:
                 site_count = 0
         
-        # Check if geocoded
-        geocoded = geocoded_csv.exists()
+        # Check if geocoded (either geocoded.csv exists OR geocoded-errors.csv exists)
+        # This means geocoding has been attempted
+        geocoded = geocoded_csv.exists() or geocoded_errors_csv.exists()
+        
+        # Count geocoding errors from geocoded-errors.csv
+        error_count = 0
+        if geocoded_errors_csv.exists():
+            try:
+                df_errors = pd.read_csv(geocoded_errors_csv)
+                error_count = len(df_errors)
+            except Exception:
+                error_count = 0
         
         # Get cluster count from clustered.csv
         cluster_count = None
@@ -194,6 +205,7 @@ def list_workspace_states(workspace_name: str):
             "name": state_name,
             "site_count": site_count,
             "geocoded": geocoded,
+            "geocode_errors": error_count,
             "cluster_count": cluster_count
         })
     
@@ -282,17 +294,41 @@ async def parse_excel_upload(
 def geocode_addresses(request: GeocodeRequest):
     """Geocode addresses from workspace's state-specific addresses.csv file"""
     import pandas as pd
-    output_path = geocode(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
+    from pathlib import Path
     
-    # Count how many addresses were geocoded
-    df = pd.read_csv(output_path)
-    addresses_count = len(df)
-    
-    return GeocodeResponse(
-        output_path=str(output_path),
-        message=f"Geocoding completed for state '{request.state_abbr}'. Results saved to {output_path}",
-        addresses_geocoded=addresses_count
-    )
+    try:
+        output_path = geocode(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
+        
+        # Count how many addresses were geocoded
+        df = pd.read_csv(output_path)
+        addresses_count = len(df)
+        
+        return GeocodeResponse(
+            output_path=str(output_path),
+            message=f"Geocoding completed for state '{request.state_abbr}'. {addresses_count} addresses successfully geocoded.",
+            addresses_geocoded=addresses_count
+        )
+    except ValueError as e:
+        # Geocoding completed but with some errors
+        # The error message contains details about successful and failed geocodes
+        error_msg = str(e)
+        
+        # Extract the output path from the workspace structure
+        workspace_path = get_project_root() / "data" / "workspace" / request.workspace_name
+        output_path = workspace_path / "cache" / request.state_abbr / "geocoded.csv"
+        
+        # Count successful geocodes
+        addresses_count = 0
+        if output_path.exists():
+            df = pd.read_csv(output_path)
+            addresses_count = len(df)
+        
+        # Return success response with warning message
+        return GeocodeResponse(
+            output_path=str(output_path),
+            message=f"Geocoding completed for state '{request.state_abbr}' with errors. {error_msg}",
+            addresses_geocoded=addresses_count
+        )
 
 
 @app.post("/cluster", response_model=ClusterResponse)

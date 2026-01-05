@@ -101,11 +101,12 @@ const clusterSummary = computed(() => {
     crews: teamIds.size
   })).sort((a, b) => a.id - b.id)
   
-  const maxCrews = Math.max(...clusters.map(c => c.crews))
+  // Sum the crews needed across all clusters for parallel work
+  const totalCrews = clusters.reduce((sum, c) => sum + c.crews, 0)
   
   return {
     clusterCount: clusters.length,
-    maxCrews,
+    maxCrews: totalCrews,
     clusters
   }
 })

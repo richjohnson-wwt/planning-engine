@@ -49,6 +49,7 @@
                 <th class="col-sites">Sites</th>
                 <th class="col-clusters">Clusters</th>
                 <th class="col-geocode">Geocode</th>
+                <th class="col-errors">Errors</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +83,11 @@
                     {{ geocodingState === state.name ? 'Geocoding...' : 'Geocode' }}
                   </button>
                   <span v-else class="status-complete">✓ Complete</span>
+                </td>
+                <td class="col-errors">
+                  <span v-if="state.geocode_errors > 0" class="error-count">{{ state.geocode_errors }}</span>
+                  <span v-else-if="state.geocoded" class="no-errors">0</span>
+                  <span v-else>-</span>
                 </td>
               </tr>
             </tbody>
@@ -188,6 +194,9 @@ async function loadStates(workspaceName) {
 }
 
 async function handleGeocode(stateName) {
+  let geocodeSuccess = false
+  let geocodeMessage = ''
+  
   try {
     geocodingState.value = stateName
     
@@ -196,21 +205,41 @@ async function handleGeocode(stateName) {
     updateState()
     
     // Call geocode API
-    await geocodeAPI.geocode(store.workspace, stateName)
+    const geocodeResponse = await geocodeAPI.geocode(store.workspace, stateName)
+    geocodeSuccess = true
+    geocodeMessage = geocodeResponse.data?.message || 'Geocoding completed'
     
-    // Automatically run clustering after geocoding (it's fast and always useful)
-    await clusterAPI.cluster(store.workspace, stateName)
-    
-    // Refresh state list to update geocode status
-    await loadStates(store.workspace)
-    
-    alert(`Geocoding and clustering completed for ${stateName}!`)
   } catch (err) {
     console.error('Error geocoding:', err)
     alert(`Error: ${err.response?.data?.detail || err.message}`)
-  } finally {
     geocodingState.value = null
+    return
   }
+  
+  // If geocoding succeeded (even with some errors), run clustering
+  if (geocodeSuccess) {
+    try {
+      // Automatically run clustering after geocoding (it's fast and always useful)
+      await clusterAPI.cluster(store.workspace, stateName)
+      
+      // Refresh state list to update geocode status
+      await loadStates(store.workspace)
+      
+      // Show appropriate message based on whether there were geocoding errors
+      if (geocodeMessage.includes('error')) {
+        alert(`Geocoding completed with some errors. Clustering completed for successfully geocoded addresses in ${stateName}.\n\nCheck the "Errors" column for details.`)
+      } else {
+        alert(`Geocoding and clustering completed for ${stateName}!`)
+      }
+    } catch (clusterErr) {
+      console.error('Error clustering:', clusterErr)
+      // Refresh state list anyway to show geocoding is complete
+      await loadStates(store.workspace)
+      alert(`Geocoding completed but clustering failed: ${clusterErr.response?.data?.detail || clusterErr.message}`)
+    }
+  }
+  
+  geocodingState.value = null
 }
 
 function getStatePlaceholder() {
@@ -526,6 +555,31 @@ h2 {
 .col-geocode {
   width: 140px;
   text-align: center;
+}
+
+.col-errors {
+  width: 80px;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.error-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.no-errors {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .btn-geocode {

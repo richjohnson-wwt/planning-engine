@@ -131,8 +131,9 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     Geocode addresses from the workspace's state-specific addresses.csv file.
     
     Reads addresses from data/workspace/{workspace_name}/input/{state_abbr}/addresses.csv,
-    calls the batch geocoding API, and saves results to 
-    data/workspace/{workspace_name}/cache/{state_abbr}/geocoded.csv.
+    calls the batch geocoding API, and saves results to:
+    - Successfully geocoded addresses: cache/{state_abbr}/geocoded.csv
+    - Failed geocodes: cache/{state_abbr}/geocoded-errors.csv
     
     Args:
         workspace_name: Name of the workspace containing addresses.csv
@@ -144,6 +145,7 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     Raises:
         FileNotFoundError: If workspace or addresses.csv doesn't exist
         Exception: If geocoding fails
+        ValueError: If geocoding errors occurred (with details in error message)
     """
     from .data_prep.geocode import batch_geocode_sites
     from .core.workspace import validate_workspace, validate_state_file
@@ -184,13 +186,39 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     df['lat'] = lats
     df['lon'] = lons
     
+    # Separate successful geocodes from failures
+    df_success = df[df['lat'].notna() & df['lon'].notna()].copy()
+    df_errors = df[df['lat'].isna() | df['lon'].isna()].copy()
+    
     # Save to state-specific cache directory
     cache_dir = workspace_path / "cache" / state_abbr
     cache_dir.mkdir(parents=True, exist_ok=True)
-    output_path = cache_dir / "geocoded.csv"
-    df.to_csv(output_path, index=False)
     
-    print(f"✓ Geocoded addresses for state '{state_abbr}' saved to: {output_path}")
+    # Save successfully geocoded addresses
+    output_path = cache_dir / "geocoded.csv"
+    df_success.to_csv(output_path, index=False)
+    
+    print(f"✓ Successfully geocoded {len(df_success)} addresses saved to: {output_path}")
+    
+    # Save failed geocodes to separate error file if any exist
+    if len(df_errors) > 0:
+        error_path = cache_dir / "geocoded-errors.csv"
+        df_errors.to_csv(error_path, index=False)
+        
+        error_msg = (
+            f"⚠️  WARNING: {len(df_errors)} address(es) could not be geocoded!\n"
+            f"   Failed addresses saved to: {error_path}\n"
+            f"   These addresses will be excluded from route planning.\n"
+            f"   Please review and correct the addresses, then re-run geocoding."
+        )
+        print(error_msg)
+        
+        # Raise an error to notify the caller
+        raise ValueError(
+            f"Geocoding completed with {len(df_errors)} error(s). "
+            f"See {error_path} for details. "
+            f"Successfully geocoded {len(df_success)} addresses."
+        )
     
     return output_path
 
