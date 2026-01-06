@@ -25,3 +25,6 @@ trigger: always_on
 - Python fastapi for the backend
 - Vue.js for the front end
 - pytest for backend tests
+
+## 4. Cascade Write/Chat
+- If I give instruction to add/update code and the Cascade mode is set to 'Chat', prompt me to switch it to 'Write'.

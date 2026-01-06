@@ -22,6 +22,16 @@
         <h3>4. Plan Routes</h3>
         <p>Generate optimized routes for your teams</p>
       </div>
+      
+      <div class="step">
+        <h3>5. Assign Teams</h3>
+        <p>Create teams and assign them to planned routes</p>
+      </div>
+      
+      <div class="step">
+        <h3>6. Track Progress</h3>
+        <p>Monitor site completion and update status</p>
+      </div>
     </div>
     
     <div class="quick-start">

@@ -116,6 +116,32 @@ export const teamAPI = {
   
   getCities(workspaceName, stateAbbr) {
     return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/cities`)
+  },
+  
+  getPlanningTeamIds(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/planning-team-ids`)
+  }
+}
+
+// Progress Tracking API
+export const progressAPI = {
+  list(workspaceName, stateFilter = null) {
+    const params = stateFilter ? { state: stateFilter } : {}
+    return api.get(`/workspaces/${workspaceName}/progress`, { params })
+  },
+  
+  initialize(workspaceName, forceRefresh = false) {
+    return api.post(`/workspaces/${workspaceName}/progress/init`, null, {
+      params: { force_refresh: forceRefresh }
+    })
+  },
+  
+  update(workspaceName, siteId, updateData) {
+    return api.put(`/workspaces/${workspaceName}/progress/${siteId}`, updateData)
+  },
+  
+  bulkUpdate(workspaceName, updateData) {
+    return api.put(`/workspaces/${workspaceName}/progress/bulk`, updateData)
   }
 }
 

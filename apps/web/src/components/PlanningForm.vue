@@ -254,6 +254,14 @@ watch(isTeamsLocked, (locked) => {
   }
 })
 
+// Watch for cluster info changes to update team count
+// This handles the case where clustering is already enabled and cluster info gets updated
+watch(() => clusterInfo.value?.cluster_count, (newCount) => {
+  if (isTeamsLocked.value && newCount !== undefined && newCount !== null) {
+    formData.value.team_config.teams = newCount
+  }
+})
+
 // Watch store for workspace and state changes
 watch(() => store.workspace, (newWorkspace) => {
   formData.value.workspace = newWorkspace

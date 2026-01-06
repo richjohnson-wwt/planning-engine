@@ -20,12 +20,14 @@ def get_teams_csv_path(workspace_name: str, state_abbr: str) -> Path:
     
     Args:
         workspace_name: Name of the workspace
-        state_abbr: State abbreviation (e.g., "LA", "NC")
+        state_abbr: State name or abbreviation (e.g., "Kansas", "KS", "LA", "NC")
+                   Uses whatever format is in the directory structure
         
     Returns:
         Path to teams.csv file
     """
     workspace_path = validate_workspace(workspace_name)
+    # Use the state name as-is (could be full name like "Kansas" or abbreviation like "KS")
     teams_csv = workspace_path / "cache" / state_abbr / "teams.csv"
     
     # Ensure the state cache directory exists
@@ -59,6 +61,10 @@ def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
         teams = []
         for _, row in df.iterrows():
             team_data = row.to_dict()
+            
+            # Convert team_id to string (pandas may read it as int)
+            if 'team_id' in team_data:
+                team_data['team_id'] = str(team_data['team_id'])
             
             # Handle date fields
             for date_field in ['availability_start', 'availability_end', 'created_date']:

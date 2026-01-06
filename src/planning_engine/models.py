@@ -206,6 +206,8 @@ class SiteProgress(BaseModel):
     crew_assigned: Optional[str] = None
     notes: str = ""
     state: str  # State abbreviation for filtering
+    city: str = ""  # City name for context
+    cluster_id: Optional[int] = None  # Cluster assignment for grouping
     last_updated: Optional[str] = None  # ISO timestamp
     
     model_config = {

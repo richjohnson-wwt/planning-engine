@@ -445,6 +445,25 @@ def run_plan(request: PlanRequest):
             print(f"✓ Map generated: {map_file}")
         except Exception as e:
             print(f"⚠ Warning: Could not generate map: {e}")
+        
+        # Initialize/update progress tracking
+        try:
+            from planning_engine.progress_tracking import (
+                initialize_progress_from_geocoded,
+                sync_progress_with_plan_result
+            )
+            
+            # Initialize progress.csv if it doesn't exist (adds new sites)
+            sites_added = initialize_progress_from_geocoded(request.workspace, force_refresh=True)
+            if sites_added > 0:
+                print(f"✓ Progress tracking initialized: {sites_added} new sites added")
+            
+            # Sync crew assignments from planning results
+            updated_count = sync_progress_with_plan_result(request.workspace, result.model_dump())
+            if updated_count > 0:
+                print(f"✓ Progress updated: {updated_count} sites assigned to crews")
+        except Exception as e:
+            print(f"⚠ Warning: Could not update progress tracking: {e}")
     
     return result
 
@@ -669,9 +688,8 @@ def generate_team_id_endpoint(workspace_name: str, state_abbr: str):
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/cities")
 def get_cities(workspace_name: str, state_abbr: str):
     """
-    Get list of cities from geocoded sites in a state.
-    
-    Useful for populating city dropdown in team management UI.
+    Get list of available cities for a state from geocoded data.
+    Used to populate city dropdown when creating teams.
     """
     from planning_engine.team_management import get_available_cities
     
@@ -680,3 +698,194 @@ def get_cities(workspace_name: str, state_abbr: str):
         return {"cities": cities}
     except Exception as e:
         return {"error": str(e), "cities": []}
+
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/planning-team-ids")
+def get_planning_team_ids(workspace_name: str, state_abbr: str):
+    """
+    Get unique Team IDs from the latest planning result for a state.
+    Used to populate Team ID dropdown when creating teams.
+    
+    Returns list of unique team IDs from the most recent planning output.
+    If no planning result exists, returns empty list.
+    """
+    from pathlib import Path
+    import json
+    from planning_engine.core.workspace import validate_workspace
+    
+    try:
+        workspace_path = validate_workspace(workspace_name)
+        output_dir = workspace_path / "output" / state_abbr
+        
+        if not output_dir.exists():
+            return {"team_ids": [], "message": "No planning results found. Run a plan first."}
+        
+        # Find the most recent route_plan_*.json file
+        plan_files = sorted(output_dir.glob("route_plan_*.json"), reverse=True)
+        
+        if not plan_files:
+            return {"team_ids": [], "message": "No planning results found. Run a plan first."}
+        
+        # Load the most recent plan
+        latest_plan = plan_files[0]
+        with open(latest_plan, 'r') as f:
+            plan_data = json.load(f)
+        
+        # Extract unique team IDs from team_days
+        team_ids = set()
+        result = plan_data.get('result', {})
+        team_days = result.get('team_days', [])
+        
+        for team_day in team_days:
+            # Try team_label first (e.g., "C1-T1"), fall back to team_id
+            team_id = team_day.get('team_label') or str(team_day.get('team_id', ''))
+            if team_id:
+                team_ids.add(team_id)
+        
+        # Convert to sorted list
+        team_ids_list = sorted(list(team_ids))
+        
+        return {
+            "team_ids": team_ids_list,
+            "message": f"Found {len(team_ids_list)} unique team(s) from latest plan"
+        }
+    
+    except Exception as e:
+        return {"team_ids": [], "error": str(e)}
+
+
+# ============================================================================
+# PROGRESS TRACKING ENDPOINTS
+# ============================================================================
+
+@app.get("/workspaces/{workspace_name}/progress")
+def get_progress(workspace_name: str, state: str = None):
+    """
+    Get progress tracking data for a workspace.
+    
+    Optional query parameter 'state' to filter by state abbreviation.
+    If not provided, returns progress for all states.
+    """
+    from planning_engine.progress_tracking import load_progress
+    
+    try:
+        response = load_progress(workspace_name, state_filter=state)
+        return response
+    except Exception as e:
+        return {
+            "error": str(e),
+            "progress": [],
+            "total_sites": 0,
+            "by_status": {}
+        }
+
+
+@app.post("/workspaces/{workspace_name}/progress/init")
+def initialize_progress(workspace_name: str, force_refresh: bool = False):
+    """
+    Initialize progress tracking from geocoded sites.
+    
+    Scans all cache/{state}/geocoded.csv files and creates progress.csv
+    with 'pending' status for all sites.
+    
+    Query parameter 'force_refresh' will re-scan and add any new sites.
+    """
+    from planning_engine.progress_tracking import initialize_progress_from_geocoded
+    
+    try:
+        sites_added = initialize_progress_from_geocoded(workspace_name, force_refresh)
+        return {
+            "success": True,
+            "message": f"Initialized progress tracking for {sites_added} sites",
+            "sites_added": sites_added
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "sites_added": 0
+        }
+
+
+@app.put("/workspaces/{workspace_name}/progress/{site_id}")
+def update_progress(workspace_name: str, site_id: str, update_data: dict):
+    """
+    Update progress for a single site.
+    
+    Accepts partial updates - only provided fields will be updated.
+    """
+    from planning_engine.progress_tracking import update_site_progress
+    
+    try:
+        # Extract update fields
+        status = update_data.get('status')
+        completed_date = update_data.get('completed_date')
+        crew_assigned = update_data.get('crew_assigned')
+        notes = update_data.get('notes')
+        
+        # Convert completed_date string to date if provided
+        if completed_date:
+            from datetime import datetime
+            completed_date = datetime.fromisoformat(completed_date).date()
+        
+        updated_site = update_site_progress(
+            workspace_name,
+            site_id,
+            status=status,
+            completed_date=completed_date,
+            crew_assigned=crew_assigned,
+            notes=notes
+        )
+        
+        return {"success": True, "site": updated_site}
+    
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to update progress: {str(e)}"}
+
+
+@app.put("/workspaces/{workspace_name}/progress/bulk")
+def bulk_update_progress_endpoint(workspace_name: str, update_data: dict):
+    """
+    Bulk update progress for multiple sites.
+    
+    Request body should include:
+    - site_ids: List of site IDs to update
+    - status: Optional new status
+    - completed_date: Optional completion date
+    - crew_assigned: Optional crew assignment
+    - notes: Optional notes
+    """
+    from planning_engine.progress_tracking import bulk_update_progress
+    
+    try:
+        site_ids = update_data.get('site_ids', [])
+        status = update_data.get('status')
+        completed_date = update_data.get('completed_date')
+        crew_assigned = update_data.get('crew_assigned')
+        notes = update_data.get('notes')
+        
+        # Convert completed_date string to date if provided
+        if completed_date:
+            from datetime import datetime
+            completed_date = datetime.fromisoformat(completed_date).date()
+        
+        updated_count = bulk_update_progress(
+            workspace_name,
+            site_ids,
+            status=status,
+            completed_date=completed_date,
+            crew_assigned=crew_assigned,
+            notes=notes
+        )
+        
+        return {
+            "success": True,
+            "message": f"Updated {updated_count} sites",
+            "updated_count": updated_count
+        }
+    
+    except Exception as e:
+        return {"success": False, "error": f"Failed to bulk update: {str(e)}"}
+

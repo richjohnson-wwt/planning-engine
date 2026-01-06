@@ -28,7 +28,7 @@
       </div>
       
       <button 
-        @click="showAddTeamModal = true" 
+        @click="openAddTeamModal" 
         class="btn btn-primary"
         :disabled="!selectedState"
       >
@@ -108,15 +108,31 @@
         
         <div class="modal-body">
           <div class="form-group">
-            <label for="team-id">Team ID</label>
+            <label for="team-id">Team ID *</label>
+            <select 
+              v-if="!editingTeam"
+              id="team-id"
+              v-model="formData.team_id" 
+              class="form-input"
+              required
+              :disabled="loadingPlanningTeamIds"
+            >
+              <option value="">{{ planningTeamIdsMessage || 'Select Team ID from planning...' }}</option>
+              <option v-for="teamId in planningTeamIds" :key="teamId" :value="teamId">
+                {{ teamId }}
+              </option>
+            </select>
             <input 
+              v-else
               id="team-id"
               v-model="formData.team_id" 
               type="text" 
               class="form-input"
-              :readonly="!!editingTeam"
-              placeholder="Auto-generated"
+              readonly
             />
+            <small v-if="!editingTeam && planningTeamIds.length === 0" class="help-text">
+              {{ planningTeamIdsMessage || 'Run a plan first to see available Team IDs' }}
+            </small>
           </div>
           
           <div class="form-group">
@@ -273,8 +289,11 @@ const selectedState = ref('')
 const teams = ref([])
 const availableStates = ref([])
 const availableCities = ref([])
+const planningTeamIds = ref([])
+const planningTeamIdsMessage = ref('')
 const loading = ref(false)
 const loadingStates = ref(false)
+const loadingPlanningTeamIds = ref(false)
 const error = ref('')
 
 // Modal state
@@ -356,6 +375,30 @@ async function loadCities() {
   }
 }
 
+async function loadPlanningTeamIds() {
+  if (!store.workspace || !selectedState.value) return
+  
+  loadingPlanningTeamIds.value = true
+  planningTeamIds.value = []
+  planningTeamIdsMessage.value = ''
+  
+  try {
+    const response = await teamAPI.getPlanningTeamIds(store.workspace, selectedState.value)
+    planningTeamIds.value = response.data.team_ids || []
+    planningTeamIdsMessage.value = response.data.message || ''
+    
+    if (planningTeamIds.value.length === 0 && !response.data.error) {
+      planningTeamIdsMessage.value = 'Run a plan first to see available Team IDs'
+    }
+  } catch (err) {
+    console.error('Failed to load planning team IDs:', err)
+    planningTeamIds.value = []
+    planningTeamIdsMessage.value = 'Failed to load planning team IDs'
+  } finally {
+    loadingPlanningTeamIds.value = false
+  }
+}
+
 async function generateTeamId() {
   if (!store.workspace || !selectedState.value) return ''
   
@@ -366,6 +409,12 @@ async function generateTeamId() {
     console.error('Failed to generate team ID:', err)
     return ''
   }
+}
+
+async function openAddTeamModal() {
+  // Load planning team IDs when opening the modal
+  await loadPlanningTeamIds()
+  showAddTeamModal.value = true
 }
 
 function editTeam(team) {
@@ -775,6 +824,14 @@ h2 {
   outline: none;
   border-color: #1e3a8a;
   box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.help-text {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 .form-input:disabled,

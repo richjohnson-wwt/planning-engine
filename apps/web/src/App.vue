@@ -8,6 +8,7 @@
           <router-link to="/planning">Planning</router-link>
           <router-link to="/routes">Routes</router-link>
           <router-link to="/teams">Teams</router-link>
+          <router-link to="/progress">Progress</router-link>
         </nav>
       </div>
     </header>
