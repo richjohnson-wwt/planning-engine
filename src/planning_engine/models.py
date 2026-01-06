@@ -147,3 +147,101 @@ class CalendarPlanResult(BaseModel):
             start_date=self.start_date,
             end_date=self.end_date,
         )
+
+
+class Team(BaseModel):
+    """Team model for managing crews/teams per state.
+    
+    Teams are stored in state-specific teams.csv files.
+    Used for assigning crews to routes and tracking progress.
+    """
+    team_id: str
+    team_name: str
+    city: str
+    cluster_id: Optional[int] = None  # Optional cluster assignment
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    availability_start: Optional[date] = None
+    availability_end: Optional[date] = None
+    notes: str = ""
+    created_date: Optional[date] = None
+    
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "team_id": "TEAM-LA-001",
+                    "team_name": "Team Alpha",
+                    "city": "New Orleans",
+                    "cluster_id": 0,
+                    "contact_name": "John Smith",
+                    "contact_phone": "555-0101",
+                    "contact_email": "john@example.com",
+                    "availability_start": "2026-01-06",
+                    "availability_end": "2026-03-31",
+                    "notes": "Experienced crew",
+                    "created_date": "2026-01-06"
+                }
+            ]
+        }
+    }
+
+
+class TeamListResponse(BaseModel):
+    """Response containing list of teams."""
+    teams: List[Team]
+    total_teams: int
+
+
+class SiteProgress(BaseModel):
+    """Progress tracking for individual sites.
+    
+    Tracks the current status of site visits for crawl-walk-run workflow.
+    Stored in workspace-wide progress.csv file.
+    """
+    site_id: str
+    status: str  # pending | in_progress | completed | blocked
+    completed_date: Optional[date] = None
+    crew_assigned: Optional[str] = None
+    notes: str = ""
+    state: str  # State abbreviation for filtering
+    last_updated: Optional[str] = None  # ISO timestamp
+    
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "site_id": "SITE001",
+                    "status": "completed",
+                    "completed_date": "2026-01-05",
+                    "crew_assigned": "Team-A",
+                    "notes": "Hardware installed successfully",
+                    "state": "LA",
+                    "last_updated": "2026-01-05T14:30:00"
+                }
+            ]
+        }
+    }
+
+
+class ProgressBulkUpdate(BaseModel):
+    """Bulk update request for multiple sites."""
+    site_ids: List[str]
+    status: Optional[str] = None
+    crew_assigned: Optional[str] = None
+    notes: Optional[str] = None
+    completed_date: Optional[date] = None
+
+
+class ProgressInitRequest(BaseModel):
+    """Request to initialize progress tracking from geocoded sites."""
+    workspace_name: str
+    force_refresh: bool = False  # If True, re-scan and add new sites
+
+
+class ProgressResponse(BaseModel):
+    """Response containing progress records."""
+    progress: List[SiteProgress]
+    total_sites: int
+    by_status: dict[str, int]  # Count by status

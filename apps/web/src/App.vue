@@ -6,7 +6,8 @@
         <nav>
           <router-link to="/">Home</router-link>
           <router-link to="/planning">Planning</router-link>
-          <router-link to="/results">Results</router-link>
+          <router-link to="/routes">Routes</router-link>
+          <router-link to="/teams">Teams</router-link>
         </nav>
       </div>
     </header>

@@ -92,4 +92,31 @@ export const outputAPI = {
   }
 }
 
+// Team Management API
+export const teamAPI = {
+  list(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/teams`)
+  },
+  
+  create(workspaceName, stateAbbr, team) {
+    return api.post(`/workspaces/${workspaceName}/states/${stateAbbr}/teams`, team)
+  },
+  
+  update(workspaceName, stateAbbr, teamId, team) {
+    return api.put(`/workspaces/${workspaceName}/states/${stateAbbr}/teams/${teamId}`, team)
+  },
+  
+  delete(workspaceName, stateAbbr, teamId) {
+    return api.delete(`/workspaces/${workspaceName}/states/${stateAbbr}/teams/${teamId}`)
+  },
+  
+  generateId(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/teams/generate-id`)
+  },
+  
+  getCities(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/cities`)
+  }
+}
+
 export default api

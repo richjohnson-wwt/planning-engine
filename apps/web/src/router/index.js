@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import Planning from '../views/Planning.vue'
-import Results from '../views/Results.vue'
+import Routes from '../views/Routes.vue'
+import Teams from '../views/Teams.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -17,9 +18,19 @@ const router = createRouter({
       component: Planning
     },
     {
+      path: '/routes',
+      name: 'routes',
+      component: Routes
+    },
+    {
+      path: '/teams',
+      name: 'teams',
+      component: Teams
+    },
+    // Legacy redirect for old /results URL
+    {
       path: '/results',
-      name: 'results',
-      component: Results
+      redirect: '/routes'
     }
   ]
 })

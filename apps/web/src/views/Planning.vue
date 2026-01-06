@@ -317,10 +317,10 @@ async function handlePlanSubmit() {
     console.log('handlePlanSubmit: Plan API response received', response.data)
     
     store.setPlanResult(response.data)
-    console.log('handlePlanSubmit: Plan result stored, navigating to results')
+    console.log('handlePlanSubmit: Plan result stored, navigating to routes')
     
-    // Navigate to results page
-    await router.push('/results')
+    // Navigate to routes page
+    await router.push('/routes')
     console.log('handlePlanSubmit: Navigation complete')
   } catch (err) {
     console.error('handlePlanSubmit: Error occurred', err)

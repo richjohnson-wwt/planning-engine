@@ -548,3 +548,135 @@ def list_output_files(workspace_name: str, state_abbr: str):
     files.sort(key=lambda x: x["modified"], reverse=True)
     
     return {"files": files}
+
+
+# ============================================================================
+# TEAM MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams")
+def list_teams(workspace_name: str, state_abbr: str):
+    """
+    List all teams for a workspace and state.
+    
+    Returns list of teams with their details.
+    """
+    from planning_engine.team_management import load_teams
+    from planning_engine.models import TeamListResponse
+    
+    try:
+        teams = load_teams(workspace_name, state_abbr)
+        return TeamListResponse(teams=teams, total_teams=len(teams))
+    except Exception as e:
+        return {"error": str(e), "teams": [], "total_teams": 0}
+
+
+@app.post("/workspaces/{workspace_name}/states/{state_abbr}/teams")
+def create_team(workspace_name: str, state_abbr: str, team: dict):
+    """
+    Create a new team for a workspace and state.
+    
+    If team_id is not provided, it will be auto-generated.
+    """
+    from planning_engine.team_management import add_team, generate_team_id
+    from planning_engine.models import Team
+    from datetime import date
+    
+    try:
+        # Auto-generate team_id if not provided
+        if not team.get('team_id'):
+            team['team_id'] = generate_team_id(workspace_name, state_abbr)
+        
+        # Set created_date if not provided
+        if not team.get('created_date'):
+            team['created_date'] = date.today().isoformat()
+        
+        # Create Team object
+        team_obj = Team(**team)
+        
+        # Add team
+        added_team = add_team(workspace_name, state_abbr, team_obj)
+        
+        return {"success": True, "team": added_team}
+    
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to create team: {str(e)}"}
+
+
+@app.put("/workspaces/{workspace_name}/states/{state_abbr}/teams/{team_id}")
+def update_team_endpoint(workspace_name: str, state_abbr: str, team_id: str, team: dict):
+    """
+    Update an existing team.
+    """
+    from planning_engine.team_management import update_team
+    from planning_engine.models import Team
+    
+    try:
+        # Ensure team_id in body matches URL parameter
+        team['team_id'] = team_id
+        
+        # Create Team object
+        team_obj = Team(**team)
+        
+        # Update team
+        updated_team = update_team(workspace_name, state_abbr, team_id, team_obj)
+        
+        return {"success": True, "team": updated_team}
+    
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to update team: {str(e)}"}
+
+
+@app.delete("/workspaces/{workspace_name}/states/{state_abbr}/teams/{team_id}")
+def delete_team_endpoint(workspace_name: str, state_abbr: str, team_id: str):
+    """
+    Delete a team.
+    """
+    from planning_engine.team_management import delete_team
+    
+    try:
+        success = delete_team(workspace_name, state_abbr, team_id)
+        
+        if success:
+            return {"success": True, "message": f"Team {team_id} deleted"}
+        else:
+            return {"success": False, "error": f"Team {team_id} not found"}
+    
+    except Exception as e:
+        return {"success": False, "error": f"Failed to delete team: {str(e)}"}
+
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams/generate-id")
+def generate_team_id_endpoint(workspace_name: str, state_abbr: str):
+    """
+    Generate a unique team ID for a state.
+    
+    Useful for UI to pre-populate team_id field.
+    """
+    from planning_engine.team_management import generate_team_id
+    
+    try:
+        team_id = generate_team_id(workspace_name, state_abbr)
+        return {"team_id": team_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/cities")
+def get_cities(workspace_name: str, state_abbr: str):
+    """
+    Get list of cities from geocoded sites in a state.
+    
+    Useful for populating city dropdown in team management UI.
+    """
+    from planning_engine.team_management import get_available_cities
+    
+    try:
+        cities = get_available_cities(workspace_name, state_abbr)
+        return {"cities": cities}
+    except Exception as e:
+        return {"error": str(e), "cities": []}

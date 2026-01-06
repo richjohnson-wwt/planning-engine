@@ -1,15 +1,27 @@
 <template>
-  <div class="results">
-    <h2>Planning Results</h2>
+  <div class="routes">
+    <h2>Route Planning Results</h2>
     
-    <div v-if="!store.planResult" class="no-results">
-      <p>No planning results available. Please run a plan first.</p>
+    <!-- Workspace and State Display -->
+    <div v-if="workspaceFromResult && stateFromResult" class="context-display">
+      <div class="context-item">
+        <span class="context-label">Workspace:</span>
+        <span class="context-value">{{ workspaceFromResult }}</span>
+      </div>
+      <div class="context-item">
+        <span class="context-label">State:</span>
+        <span class="context-value">{{ stateFromResult }}</span>
+      </div>
+    </div>
+    
+    <div v-if="!store.planResult" class="no-routes">
+      <p>No route planning results available. Please run a plan first.</p>
       <router-link to="/planning" class="btn btn-primary">
         Go to Planning
       </router-link>
     </div>
     
-    <div v-else class="results-container">
+    <div v-else class="routes-container">
       <!-- Summary Cards -->
       <div class="summary-cards">
         <div class="card">
@@ -304,12 +316,12 @@ watch(() => store.planResult, () => {
 </script>
 
 <style scoped>
-.results {
+.routes {
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.results-header {
+.routes-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -320,7 +332,35 @@ watch(() => store.planResult, () => {
 
 h2 {
   color: #1e3a8a;
-  margin: 0;
+  margin: 0 0 1rem 0;
+}
+
+.context-display {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem;
+  background: #f3f4f6;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.context-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.context-value {
+  font-weight: 500;
+  color: #1e3a8a;
+  font-size: 0.95rem;
 }
 
 .selector-group {
@@ -370,14 +410,14 @@ h2 {
   opacity: 0.6;
 }
 
-.no-results {
+.no-routes {
   text-align: center;
   padding: 3rem;
   background: #f9fafb;
   border-radius: 8px;
 }
 
-.results-container {
+.routes-container {
   display: flex;
   flex-direction: column;
   gap: 2rem;

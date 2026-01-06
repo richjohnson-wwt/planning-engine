@@ -1,0 +1,272 @@
+"""Team management functionality for tracking crews/teams per state.
+
+Teams are stored in state-specific CSV files at:
+data/workspace/{workspace_name}/cache/{state}/teams.csv
+
+This module provides CRUD operations for team management.
+"""
+
+from pathlib import Path
+from typing import List, Optional
+import pandas as pd
+from datetime import date, datetime
+
+from .models import Team, TeamListResponse
+from .core.workspace import validate_workspace, validate_state_file
+
+
+def get_teams_csv_path(workspace_name: str, state_abbr: str) -> Path:
+    """Get the path to the teams.csv file for a workspace and state.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation (e.g., "LA", "NC")
+        
+    Returns:
+        Path to teams.csv file
+    """
+    workspace_path = validate_workspace(workspace_name)
+    teams_csv = workspace_path / "cache" / state_abbr / "teams.csv"
+    
+    # Ensure the state cache directory exists
+    teams_csv.parent.mkdir(parents=True, exist_ok=True)
+    
+    return teams_csv
+
+
+def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
+    """Load all teams for a workspace and state.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        
+    Returns:
+        List of Team objects
+    """
+    teams_csv = get_teams_csv_path(workspace_name, state_abbr)
+    
+    if not teams_csv.exists():
+        return []
+    
+    try:
+        df = pd.read_csv(teams_csv)
+        
+        if df.empty:
+            return []
+        
+        # Convert DataFrame to list of Team objects
+        teams = []
+        for _, row in df.iterrows():
+            team_data = row.to_dict()
+            
+            # Handle date fields
+            for date_field in ['availability_start', 'availability_end', 'created_date']:
+                if date_field in team_data and pd.notna(team_data[date_field]):
+                    try:
+                        team_data[date_field] = pd.to_datetime(team_data[date_field]).date()
+                    except:
+                        team_data[date_field] = None
+                else:
+                    team_data[date_field] = None
+            
+            # Handle cluster_id (can be null)
+            if 'cluster_id' in team_data and pd.notna(team_data['cluster_id']):
+                team_data['cluster_id'] = int(team_data['cluster_id'])
+            else:
+                team_data['cluster_id'] = None
+            
+            # Handle optional string fields
+            for field in ['contact_name', 'contact_phone', 'contact_email', 'notes']:
+                if field in team_data and pd.isna(team_data[field]):
+                    team_data[field] = "" if field == 'notes' else None
+            
+            teams.append(Team(**team_data))
+        
+        return teams
+    
+    except Exception as e:
+        raise ValueError(f"Failed to load teams from {teams_csv}: {str(e)}")
+
+
+def save_teams(workspace_name: str, state_abbr: str, teams: List[Team]) -> Path:
+    """Save teams to CSV file, overwriting existing file.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        teams: List of Team objects to save
+        
+    Returns:
+        Path to the saved teams.csv file
+    """
+    teams_csv = get_teams_csv_path(workspace_name, state_abbr)
+    
+    if not teams:
+        # If no teams, create empty file with headers
+        df = pd.DataFrame(columns=[
+            'team_id', 'team_name', 'city', 'cluster_id',
+            'contact_name', 'contact_phone', 'contact_email',
+            'availability_start', 'availability_end', 'notes', 'created_date'
+        ])
+    else:
+        # Convert teams to DataFrame
+        team_dicts = [team.model_dump() for team in teams]
+        df = pd.DataFrame(team_dicts)
+    
+    # Save to CSV
+    df.to_csv(teams_csv, index=False)
+    
+    return teams_csv
+
+
+def add_team(workspace_name: str, state_abbr: str, team: Team) -> Team:
+    """Add a new team to the workspace/state.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        team: Team object to add
+        
+    Returns:
+        The added Team object
+        
+    Raises:
+        ValueError: If team_id already exists
+    """
+    teams = load_teams(workspace_name, state_abbr)
+    
+    # Check for duplicate team_id
+    if any(t.team_id == team.team_id for t in teams):
+        raise ValueError(f"Team with ID '{team.team_id}' already exists")
+    
+    # Set created_date if not provided
+    if team.created_date is None:
+        team.created_date = date.today()
+    
+    teams.append(team)
+    save_teams(workspace_name, state_abbr, teams)
+    
+    return team
+
+
+def update_team(workspace_name: str, state_abbr: str, team_id: str, updated_team: Team) -> Team:
+    """Update an existing team.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        team_id: ID of the team to update
+        updated_team: Updated Team object
+        
+    Returns:
+        The updated Team object
+        
+    Raises:
+        ValueError: If team_id not found
+    """
+    teams = load_teams(workspace_name, state_abbr)
+    
+    # Find and update the team
+    found = False
+    for i, team in enumerate(teams):
+        if team.team_id == team_id:
+            teams[i] = updated_team
+            found = True
+            break
+    
+    if not found:
+        raise ValueError(f"Team with ID '{team_id}' not found")
+    
+    save_teams(workspace_name, state_abbr, teams)
+    
+    return updated_team
+
+
+def delete_team(workspace_name: str, state_abbr: str, team_id: str) -> bool:
+    """Delete a team.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        team_id: ID of the team to delete
+        
+    Returns:
+        True if team was deleted, False if not found
+    """
+    teams = load_teams(workspace_name, state_abbr)
+    
+    # Filter out the team to delete
+    original_count = len(teams)
+    teams = [t for t in teams if t.team_id != team_id]
+    
+    if len(teams) == original_count:
+        return False
+    
+    save_teams(workspace_name, state_abbr, teams)
+    
+    return True
+
+
+def generate_team_id(workspace_name: str, state_abbr: str) -> str:
+    """Generate a unique team ID for a state.
+    
+    Format: TEAM-{STATE}-{NUMBER}
+    Example: TEAM-LA-001, TEAM-LA-002, etc.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        
+    Returns:
+        Generated team ID
+    """
+    teams = load_teams(workspace_name, state_abbr)
+    
+    # Find the highest number used
+    max_num = 0
+    prefix = f"TEAM-{state_abbr}-"
+    
+    for team in teams:
+        if team.team_id.startswith(prefix):
+            try:
+                num = int(team.team_id.replace(prefix, ""))
+                max_num = max(max_num, num)
+            except ValueError:
+                continue
+    
+    # Generate next ID
+    next_num = max_num + 1
+    return f"{prefix}{next_num:03d}"
+
+
+def get_available_cities(workspace_name: str, state_abbr: str) -> List[str]:
+    """Get list of cities from geocoded sites in a state.
+    
+    Useful for populating city dropdown in UI.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        
+    Returns:
+        Sorted list of unique city names
+    """
+    workspace_path = validate_workspace(workspace_name)
+    geocoded_csv = workspace_path / "cache" / state_abbr / "geocoded.csv"
+    
+    if not geocoded_csv.exists():
+        return []
+    
+    try:
+        df = pd.read_csv(geocoded_csv)
+        
+        if 'city' not in df.columns:
+            return []
+        
+        cities = df['city'].dropna().unique().tolist()
+        return sorted(cities)
+    
+    except Exception as e:
+        print(f"Warning: Could not load cities from geocoded.csv: {e}")
+        return []
