@@ -120,6 +120,14 @@
       @close="showExcelModal = false"
       @success="handleExcelSuccess"
     />
+
+    <!-- Planning Error Dialog -->
+    <PlanningErrorDialog
+      :is-open="showErrorDialog"
+      :error="store.error"
+      :plan-request="store.planRequest"
+      @close="showErrorDialog = false"
+    />
   </div>
 </template>
 
@@ -130,6 +138,7 @@ import { planningAPI, workspaceAPI, geocodeAPI, clusterAPI } from '../services/a
 import { useRouter } from 'vue-router'
 import PlanningForm from '../components/PlanningForm.vue'
 import ExcelUploadModal from '../components/ExcelUploadModal.vue'
+import PlanningErrorDialog from '../components/PlanningErrorDialog.vue'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -138,6 +147,7 @@ const availableStates = ref([])
 const loadingStates = ref(false)
 const excelComplete = ref(false)
 const showExcelModal = ref(false)
+const showErrorDialog = ref(false)
 const geocodingState = ref(null)
 
 // Initialize state input from store
@@ -324,7 +334,10 @@ async function handlePlanSubmit() {
     console.log('handlePlanSubmit: Navigation complete')
   } catch (err) {
     console.error('handlePlanSubmit: Error occurred', err)
-    store.setError(err.response?.data?.detail || err.message)
+    const errorMessage = err.response?.data?.detail || err.message
+    store.setError(errorMessage)
+    // Show error dialog for planning failures
+    showErrorDialog.value = true
   } finally {
     console.log('handlePlanSubmit: Setting loading to false')
     store.setLoading(false)
