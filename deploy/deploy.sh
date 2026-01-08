@@ -86,6 +86,7 @@ fi
 # Install/update Python dependencies
 echo "✓ Installing Python dependencies..."
 sudo -u "$USER" "$VENV_DIR/bin/pip" install --upgrade pip
+sudo -u "$USER" "$VENV_DIR/bin/pip" install -r "$WORK_DIR/requirements.txt"
 sudo -u "$USER" "$VENV_DIR/bin/pip" install -e "$WORK_DIR"
 
 # Build Vue.js frontend
