@@ -50,6 +50,29 @@ if [ ! -L "$WORK_DIR/data" ]; then
     ln -sf "$DATA_DIR" "$WORK_DIR/data"
 fi
 
+# Initialize users.json with default admin user if it doesn't exist
+if [ ! -f "$DATA_DIR/users.json" ]; then
+    echo "✓ Creating default admin user..."
+    # Use Python to create the users.json file with proper password hashing
+    sudo -u "$USER" python3 -c "
+import json
+import bcrypt
+from datetime import datetime
+
+users = {
+    'admin': {
+        'username': 'admin',
+        'hashed_password': bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
+        'is_admin': True,
+        'created_at': datetime.now().isoformat()
+    }
+}
+
+with open('$DATA_DIR/users.json', 'w') as f:
+    json.dump(users, f, indent=2)
+"
+fi
+
 # Set ownership
 chown -R "$USER:$USER" "$WORK_DIR"
 chown -R "$USER:$USER" "$DATA_DIR"
