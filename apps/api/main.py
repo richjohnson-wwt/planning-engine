@@ -14,11 +14,19 @@ import tempfile
 from datetime import timedelta
 
 # Import authentication utilities
-from .auth import (
-    authenticate_user, create_access_token, get_current_user, get_current_user_optional_token,
-    get_current_admin_user, create_user, delete_user, list_users, User, UserInDB,
-    Token, LoginRequest, CreateUserRequest, ACCESS_TOKEN_EXPIRE_DAYS
-)
+# Try relative import first (for production/module mode), fall back to absolute (for dev)
+try:
+    from .auth import (
+        authenticate_user, create_access_token, get_current_user, get_current_user_optional_token,
+        get_current_admin_user, create_user, delete_user, list_users, User, UserInDB,
+        Token, LoginRequest, CreateUserRequest, ACCESS_TOKEN_EXPIRE_DAYS
+    )
+except ImportError:
+    from auth import (
+        authenticate_user, create_access_token, get_current_user, get_current_user_optional_token,
+        get_current_admin_user, create_user, delete_user, list_users, User, UserInDB,
+        Token, LoginRequest, CreateUserRequest, ACCESS_TOKEN_EXPIRE_DAYS
+    )
 
 # Import context management for user-scoped workspaces
 from planning_engine.paths import set_current_username, clear_current_username
