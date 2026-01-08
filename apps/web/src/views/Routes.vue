@@ -22,6 +22,88 @@
     </div>
     
     <div v-else class="routes-container">
+      <!-- Plan Configuration -->
+      <div v-if="store.planRequest" class="plan-config-section">
+        <h3>📋 Plan Configuration</h3>
+        <div class="config-grid">
+          <!-- Planning Mode -->
+          <div class="config-card">
+            <div class="config-header">
+              <span class="config-icon">⚙️</span>
+              <h4>Planning Mode</h4>
+            </div>
+            <div class="config-content">
+              <div class="mode-badge" :class="planningModeClass">
+                {{ planningModeLabel }}
+              </div>
+              <p class="config-description">{{ planningModeDescription }}</p>
+            </div>
+          </div>
+
+          <!-- Date Configuration -->
+          <div class="config-card">
+            <div class="config-header">
+              <span class="config-icon">📅</span>
+              <h4>Schedule</h4>
+            </div>
+            <div class="config-content">
+              <div class="config-row">
+                <span class="config-label">Start Date:</span>
+                <span class="config-value">{{ formatDate(store.planRequest.start_date) || 'Not set' }}</span>
+              </div>
+              <div v-if="store.planRequest.end_date" class="config-row">
+                <span class="config-label">End Date:</span>
+                <span class="config-value">{{ formatDate(store.planRequest.end_date) }}</span>
+              </div>
+              <div v-if="store.planRequest.holidays && store.planRequest.holidays.length > 0" class="config-row">
+                <span class="config-label">Holidays:</span>
+                <span class="config-value">{{ store.planRequest.holidays.length }} excluded</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Team Configuration -->
+          <div class="config-card">
+            <div class="config-header">
+              <span class="config-icon">👥</span>
+              <h4>Team Configuration</h4>
+            </div>
+            <div class="config-content">
+              <div class="config-row">
+                <span class="config-label">Teams:</span>
+                <span class="config-value-highlight">{{ store.planRequest.team_config?.teams || 0 }}</span>
+              </div>
+              <div v-if="store.planRequest.use_clusters" class="config-row">
+                <span class="config-label">Clustering:</span>
+                <span class="config-value">✓ Enabled</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Route Constraints -->
+          <div class="config-card">
+            <div class="config-header">
+              <span class="config-icon">⏱️</span>
+              <h4>Route Constraints</h4>
+            </div>
+            <div class="config-content">
+              <div class="config-row">
+                <span class="config-label">Max Route Time:</span>
+                <span class="config-value">{{ store.planRequest.max_route_minutes }} min</span>
+              </div>
+              <div class="config-row">
+                <span class="config-label">Break Time:</span>
+                <span class="config-value">{{ store.planRequest.break_minutes }} min</span>
+              </div>
+              <div class="config-row">
+                <span class="config-label">Service Time/Site:</span>
+                <span class="config-value">{{ store.planRequest.service_minutes_per_site }} min</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Summary Cards -->
       <div class="summary-cards">
         <div class="card">
@@ -57,26 +139,75 @@
         <TeamSchedule :teamDays="store.planResult.team_days" />
       </div>
       
-      <!-- Output Files Section -->
-      <div v-if="workspaceFromResult && stateFromResult" class="output-files-section">
-        <h3>Generated Files</h3>
+      <!-- File History Section -->
+      <div v-if="workspaceFromResult && stateFromResult" class="file-history-section">
+        <h3>📁 Generated Files</h3>
         <div v-if="loadingFiles" class="loading">Loading files...</div>
-        <div v-else-if="outputFiles.length > 0" class="files-list">
-          <div v-for="file in outputFiles" :key="file.filename" class="file-item">
-            <div class="file-info">
-              <span class="file-icon">{{ file.type === 'map' ? '🗺️' : '📄' }}</span>
-              <div class="file-details">
-                <a :href="file.url" target="_blank" class="file-link">
-                  {{ file.filename }}
-                </a>
-                <span class="file-meta">
-                  {{ formatFileSize(file.size) }} • {{ formatTimestamp(file.modified) }}
-                </span>
+        <div v-else-if="groupedFiles.length > 0" class="file-history">
+          <!-- Current Plan -->
+          <div v-if="groupedFiles[0]" class="plan-group current-plan">
+            <div class="plan-header">
+              <div class="plan-title">
+                <span class="current-badge">Current Plan</span>
+                <span class="plan-timestamp">{{ formatPlanTimestamp(groupedFiles[0].timestamp) }}</span>
               </div>
             </div>
-            <a :href="file.url" target="_blank" class="btn btn-sm btn-primary">
-              {{ file.type === 'map' ? 'View Map' : 'Download' }}
-            </a>
+            <div class="plan-files">
+              <div v-for="file in groupedFiles[0].files" :key="file.filename" class="file-item">
+                <div class="file-info">
+                  <span class="file-icon">{{ file.type === 'map' ? '🗺️' : '📄' }}</span>
+                  <div class="file-details">
+                    <a :href="file.url" target="_blank" class="file-link">
+                      {{ file.filename }}
+                    </a>
+                    <span class="file-meta">
+                      {{ formatFileSize(file.size) }}
+                    </span>
+                  </div>
+                </div>
+                <a :href="file.url" target="_blank" class="btn btn-sm btn-primary">
+                  {{ file.type === 'map' ? 'View Map' : 'Download' }}
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Previous Plans -->
+          <div v-if="groupedFiles.length > 1" class="previous-plans">
+            <h4>Previous Plans</h4>
+            <div v-for="(group, index) in groupedFiles.slice(1)" :key="group.timestamp" class="plan-group">
+              <div class="plan-header">
+                <div class="plan-title">
+                  <span class="plan-timestamp">{{ formatPlanTimestamp(group.timestamp) }}</span>
+                </div>
+                <button 
+                  @click="deletePlan(group)" 
+                  class="btn-delete"
+                  :disabled="deletingPlan === group.timestamp"
+                  title="Delete this plan and all its files"
+                >
+                  {{ deletingPlan === group.timestamp ? 'Deleting...' : '🗑️ Delete' }}
+                </button>
+              </div>
+              <div class="plan-files">
+                <div v-for="file in group.files" :key="file.filename" class="file-item">
+                  <div class="file-info">
+                    <span class="file-icon">{{ file.type === 'map' ? '🗺️' : '📄' }}</span>
+                    <div class="file-details">
+                      <a :href="file.url" target="_blank" class="file-link">
+                        {{ file.filename }}
+                      </a>
+                      <span class="file-meta">
+                        {{ formatFileSize(file.size) }}
+                      </span>
+                    </div>
+                  </div>
+                  <a :href="file.url" target="_blank" class="btn btn-sm btn-secondary">
+                    {{ file.type === 'map' ? 'View' : 'Download' }}
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div v-else class="no-files">
@@ -105,6 +236,32 @@ const store = usePlanningStore()
 const outputFiles = ref([])
 const loadingFiles = ref(false)
 const loadingResult = ref(false)
+const deletingPlan = ref(null)
+
+// Group files by timestamp (pairs of JSON + HTML with same timestamp)
+const groupedFiles = computed(() => {
+  if (!outputFiles.value || outputFiles.value.length === 0) return []
+  
+  // Extract timestamp from filename (e.g., route_plan_20260108_163917.json -> 20260108_163917)
+  const groups = {}
+  
+  outputFiles.value.forEach(file => {
+    const match = file.filename.match(/(\d{8}_\d{6})/)
+    if (match) {
+      const timestamp = match[1]
+      if (!groups[timestamp]) {
+        groups[timestamp] = {
+          timestamp,
+          files: []
+        }
+      }
+      groups[timestamp].files.push(file)
+    }
+  })
+  
+  // Convert to array and sort by timestamp (newest first)
+  return Object.values(groups).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+})
 
 const totalSites = computed(() => {
   if (!store.planResult?.team_days) return 0
@@ -118,6 +275,24 @@ const workspaceFromResult = computed(() => {
 
 const stateFromResult = computed(() => {
   return store.planRequest?.state_abbr || store.stateAbbr
+})
+
+// Planning mode display
+const planningModeLabel = computed(() => {
+  if (!store.planRequest) return 'Unknown'
+  // Fixed Calendar mode has an end_date, Fixed Crew mode does not
+  return store.planRequest.end_date ? 'Fixed Calendar' : 'Fixed Crew'
+})
+
+const planningModeClass = computed(() => {
+  return store.planRequest?.end_date ? 'mode-calendar' : 'mode-crew'
+})
+
+const planningModeDescription = computed(() => {
+  if (!store.planRequest) return ''
+  return store.planRequest.end_date 
+    ? 'System calculated minimum crews needed to complete by end date'
+    : 'System calculated completion time with specified number of crews'
 })
 
 const latestMapUrl = computed(() => {
@@ -147,6 +322,52 @@ function formatDate(dateStr) {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day) // month is 0-indexed
   return date.toLocaleDateString()
+}
+
+function formatPlanTimestamp(timestamp) {
+  // timestamp format: 20260108_163917 (YYYYMMDD_HHMMSS)
+  const dateStr = timestamp.substring(0, 8)
+  const timeStr = timestamp.substring(9)
+  
+  const year = dateStr.substring(0, 4)
+  const month = dateStr.substring(4, 6)
+  const day = dateStr.substring(6, 8)
+  
+  const hour = timeStr.substring(0, 2)
+  const minute = timeStr.substring(2, 4)
+  
+  const date = new Date(year, month - 1, day, hour, minute)
+  return date.toLocaleString()
+}
+
+async function deletePlan(group) {
+  const confirmMsg = `Delete this plan and all ${group.files.length} file(s)?\n\nThis action cannot be undone.`
+  
+  if (!confirm(confirmMsg)) {
+    return
+  }
+  
+  deletingPlan.value = group.timestamp
+  
+  try {
+    const workspace = workspaceFromResult.value
+    const state = stateFromResult.value
+    
+    // Delete all files in the group
+    for (const file of group.files) {
+      await outputAPI.deleteFile(workspace, state, file.filename)
+    }
+    
+    // Refresh the file list
+    await fetchOutputFiles()
+    
+    alert(`Plan deleted successfully (${group.files.length} file(s) removed)`)
+  } catch (error) {
+    console.error('Failed to delete plan:', error)
+    alert('Failed to delete plan. Please try again.')
+  } finally {
+    deletingPlan.value = null
+  }
 }
 
 function exportJSON() {
@@ -445,6 +666,119 @@ h2 {
   gap: 2rem;
 }
 
+.plan-config-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.plan-config-section h3 {
+  margin: 0 0 1.5rem 0;
+  color: #1e3a8a;
+  font-size: 1.25rem;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.config-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+  transition: all 0.2s;
+}
+
+.config-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.config-icon {
+  font-size: 1.25rem;
+}
+
+.config-header h4 {
+  margin: 0;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.config-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.config-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.config-value {
+  font-size: 0.9rem;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.config-value-highlight {
+  font-size: 1.5rem;
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.mode-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.mode-crew {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 2px solid #93c5fd;
+}
+
+.mode-calendar {
+  background: #fef3c7;
+  color: #b45309;
+  border: 2px solid #fcd34d;
+}
+
+.config-description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -481,7 +815,8 @@ h2 {
 }
 
 .map-section,
-.schedule-section {
+.schedule-section,
+.file-history-section {
   background: white;
   padding: 1.5rem;
   border-radius: 8px;
@@ -489,9 +824,118 @@ h2 {
 }
 
 .map-section h3,
-.schedule-section h3 {
+.schedule-section h3,
+.file-history-section h3 {
   margin-top: 0;
   color: #1e3a8a;
+}
+
+/* File History Styles */
+.file-history {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.plan-group {
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #f9fafb;
+  transition: all 0.2s;
+}
+
+.plan-group:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.current-plan {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.current-plan .plan-header {
+  border-bottom-color: #93c5fd;
+}
+
+.plan-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.current-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #3b82f6;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.plan-timestamp {
+  font-size: 0.95rem;
+  color: #374151;
+  font-weight: 600;
+}
+
+.btn-delete {
+  padding: 0.5rem 1rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #f87171;
+}
+
+.btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.plan-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.previous-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.previous-plans h4 {
+  margin: 0 0 0.5rem 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .export-section {

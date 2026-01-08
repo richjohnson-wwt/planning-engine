@@ -279,6 +279,12 @@ function handleSubmit() {
   // Ensure end_date is null for fixed-crew mode
   if (planningMode.value === 'fixed-crew') {
     formData.value.end_date = null
+    
+    // Default start_date to today if not provided
+    if (!formData.value.start_date) {
+      const today = new Date()
+      formData.value.start_date = today.toISOString().split('T')[0]
+    }
   }
   
   // Update store with form data

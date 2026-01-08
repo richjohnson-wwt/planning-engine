@@ -1077,6 +1077,52 @@ async def get_output_file(
     return FileResponse(file_path, media_type=media_type)
 
 
+@app.delete("/workspaces/{workspace_name}/output/{state_abbr}/{filename}")
+def delete_output_file(
+    workspace_name: str,
+    state_abbr: str,
+    filename: str,
+    current_user: UserInDB = Depends(set_user_context)
+):
+    """
+    Delete an output file (HTML map or JSON result) from workspace output directory.
+    
+    Returns success status and message.
+    """
+    from planning_engine.core.workspace import get_workspace_path
+    
+    try:
+        workspace_path = get_workspace_path(workspace_name)
+        output_dir = workspace_path / "output" / state_abbr
+        file_path = output_dir / filename
+        
+        # Security check: ensure the resolved path is within the output directory
+        try:
+            file_path = file_path.resolve()
+            output_dir = output_dir.resolve()
+            if not str(file_path).startswith(str(output_dir)):
+                raise HTTPException(status_code=400, detail="Invalid file path")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid path: {str(e)}")
+        
+        # Check if file exists
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        # Delete the file
+        file_path.unlink()
+        
+        return {
+            "success": True,
+            "message": f"File '{filename}' deleted successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+
 @app.get("/workspaces/{workspace_name}/output/{state_abbr}")
 def list_output_files(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """

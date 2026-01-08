@@ -173,6 +173,10 @@ export const outputAPI = {
   
   getLatestResult(workspaceName, stateAbbr) {
     return api.get(`/workspaces/${workspaceName}/output/${stateAbbr}/latest`)
+  },
+  
+  deleteFile(workspaceName, stateAbbr, filename) {
+    return api.delete(`/workspaces/${workspaceName}/output/${stateAbbr}/${filename}`)
   }
 }
 
