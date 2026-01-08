@@ -14,7 +14,7 @@ import tempfile
 from datetime import timedelta
 
 # Import authentication utilities
-from auth import (
+from .auth import (
     authenticate_user, create_access_token, get_current_user, get_current_user_optional_token,
     get_current_admin_user, create_user, delete_user, list_users, User, UserInDB,
     Token, LoginRequest, CreateUserRequest, ACCESS_TOKEN_EXPIRE_DAYS
