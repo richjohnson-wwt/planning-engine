@@ -133,19 +133,17 @@
                   type="checkbox" 
                   @change="toggleSelectAll"
                   :checked="allSelected"
-                  :indeterminate.prop="someSelected"
                 />
               </th>
+              <th class="sticky-left">Street Address</th>
               <th>Site ID</th>
-              <th>Street Address</th>
               <th>City</th>
-              <th>Cluster</th>
               <th>Status</th>
               <th>Crew Assigned</th>
               <th>Completed Date</th>
               <th>Notes</th>
               <th>Last Updated</th>
-              <th>Actions</th>
+              <th class="sticky-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -157,10 +155,9 @@
                   @change="toggleSelection(site.site_id)"
                 />
               </td>
+              <td class="street-address sticky-left" :title="site.street1">{{ site.street1 || '-' }}</td>
               <td class="site-id">{{ site.site_id }}</td>
-              <td class="street-address">{{ site.street1 || '-' }}</td>
               <td class="city">{{ site.city || '-' }}</td>
-              <td class="cluster">{{ site.cluster_id !== null ? `Cluster ${site.cluster_id + 1}` : '-' }}</td>
               <td>
                 <span 
                   v-if="editingSite !== site.site_id"
@@ -201,7 +198,7 @@
                 />
               </td>
               <td class="timestamp">{{ formatTimestamp(site.last_updated) }}</td>
-              <td class="actions-col">
+              <td class="actions-col sticky-right">
                 <div v-if="editingSite !== site.site_id" class="action-buttons">
                   <button @click="startEdit(site)" class="btn-icon" title="Edit">
                     ✏️
@@ -743,11 +740,47 @@ h2 {
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   overflow-x: auto;
+  position: relative;
 }
 
 .progress-table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* Sticky Columns */
+.sticky-left {
+  position: sticky;
+  left: 40px; /* Width of checkbox column */
+  background: white;
+  z-index: 10;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.sticky-right {
+  position: sticky;
+  right: 0;
+  background: white;
+  z-index: 10;
+  box-shadow: -2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Sticky column in header */
+.progress-table thead .sticky-left,
+.progress-table thead .sticky-right {
+  background: #f9fafb;
+}
+
+/* Sticky column on hover */
+.progress-table tbody tr:hover .sticky-left,
+.progress-table tbody tr:hover .sticky-right {
+  background-color: #f9fafb;
+}
+
+/* Selected row sticky columns */
+.selected-row .sticky-left,
+.selected-row .sticky-right {
+  background-color: #eff6ff !important;
 }
 
 .progress-table thead {

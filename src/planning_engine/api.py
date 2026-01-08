@@ -157,13 +157,46 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     # Read addresses from CSV
     df = pd.read_csv(addresses_csv)
     
-    # Build full address strings for geocoding
+    # Helper function to normalize address components for better geocoding
+    def normalize_address_component(text):
+        """
+        Normalize address text to improve geocoding success.
+        
+        Common issues:
+        - Apostrophes and backticks in city names (e.g., O'Fallon, O`Fallon)
+        - Smart quotes vs straight quotes
+        - Multiple spaces
+        """
+        if pd.isna(text):
+            return text
+        
+        text = str(text)
+        
+        # Replace apostrophes and backticks with spaces
+        # Examples: O'Fallon → O Fallon, O`Fallon → O Fallon
+        text = text.replace("'", " ")
+        text = text.replace("`", " ")
+        text = text.replace("'", " ")  # Smart apostrophe
+        text = text.replace("'", " ")  # Another smart apostrophe variant
+        
+        # Normalize multiple spaces to single space
+        text = " ".join(text.split())
+        
+        return text
+    
+    # Build full address strings for geocoding with normalization
     addresses = []
     for _, row in df.iterrows():
-        parts = [str(row['street1'])]
+        # Normalize street addresses and city names
+        street1 = normalize_address_component(row['street1'])
+        parts = [street1]
+        
         if 'street2' in df.columns and pd.notna(row.get('street2')) and str(row.get('street2')).strip():
-            parts.append(str(row['street2']))
-        parts.append(f"{row['city']}, {row['state']} {row['zip']}")
+            street2 = normalize_address_component(row['street2'])
+            parts.append(street2)
+        
+        city = normalize_address_component(row['city'])
+        parts.append(f"{city}, {row['state']} {row['zip']}")
         address = ", ".join(parts)
         addresses.append(address)
     
@@ -202,6 +235,10 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     
     # Save failed geocodes to separate error file if any exist
     if len(df_errors) > 0:
+        # Ensure street2 column exists for error file (required by API)
+        if 'street2' not in df_errors.columns:
+            df_errors['street2'] = ''
+        
         error_path = cache_dir / "geocoded-errors.csv"
         df_errors.to_csv(error_path, index=False)
         

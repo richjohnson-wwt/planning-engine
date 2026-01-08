@@ -162,7 +162,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { usePlanningStore } from '../stores/planning'
-import axios from 'axios'
+import api from '../services/api'
 
 const props = defineProps({
   isLoading: {
@@ -210,8 +210,8 @@ async function fetchClusterInfo() {
   
   loadingClusterInfo.value = true
   try {
-    const response = await axios.get(
-      `/api/workspaces/${formData.value.workspace}/states/${formData.value.state_abbr}/cluster-info`
+    const response = await api.get(
+      `/workspaces/${formData.value.workspace}/states/${formData.value.state_abbr}/cluster-info`
     )
     clusterInfo.value = response.data
     

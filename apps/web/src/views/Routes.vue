@@ -174,7 +174,19 @@ async function fetchOutputFiles() {
     console.log(`Fetching files from: /workspaces/${workspace}/output/${state}`)
     const response = await outputAPI.listFiles(workspace, state)
     console.log('API response:', response.data)
-    outputFiles.value = response.data.files || []
+    
+    // Add authentication token to all file URLs
+    const token = localStorage.getItem('auth_token')
+    const files = response.data.files || []
+    
+    if (token) {
+      files.forEach(file => {
+        // Add token as query parameter
+        file.url = `${file.url}?token=${token}`
+      })
+    }
+    
+    outputFiles.value = files
     console.log('Output files set:', outputFiles.value.length, 'files')
   } catch (error) {
     console.error('Error fetching output files:', error)

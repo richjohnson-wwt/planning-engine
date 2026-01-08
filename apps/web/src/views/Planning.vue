@@ -33,7 +33,22 @@
         <p class="help-text">{{ getExcelHelpText() }}</p>
       </div>
 
-      <!-- 3. State Selection Table -->
+      <!-- 3. Geocode Editor -->
+      <div class="control-section">
+        <label class="control-label">Geocode Editor</label>
+        <button 
+          class="btn-editor"
+          :disabled="!store.workspace || availableStates.length === 0"
+          @click="openEditorModal"
+          title="Edit geocoded site addresses and coordinates"
+        >
+          <span class="icon">✏️</span>
+          Edit Geocoded Sites
+        </button>
+        <p class="help-text">Fix incorrectly geocoded addresses or coordinates</p>
+      </div>
+
+      <!-- 4. State Selection and Geocoding -->
       <div class="control-section">
         <label class="control-label">States</label>
         <p class="help-text" v-if="!excelComplete">Parse Excel data first to see available states</p>
@@ -85,7 +100,14 @@
                   <span v-else class="status-complete">✓ Complete</span>
                 </td>
                 <td class="col-errors">
-                  <span v-if="state.geocode_errors > 0" class="error-count">{{ state.geocode_errors }}</span>
+                  <span 
+                    v-if="state.geocode_errors > 0" 
+                    class="error-count clickable"
+                    @click="openErrorModal(state.name)"
+                    title="Click to view and fix errors"
+                  >
+                    {{ state.geocode_errors }}
+                  </span>
                   <span v-else-if="state.geocoded" class="no-errors">0</span>
                   <span v-else>-</span>
                 </td>
@@ -106,7 +128,29 @@
     
     <!-- Loading/Error States -->
     <div v-if="store.loading" class="loading">
-      <p>Planning in progress...</p>
+      <div class="loading-header">
+        <div class="spinner"></div>
+        <h3>Planning in progress...</h3>
+      </div>
+      <div class="loading-details">
+        <div class="detail-row">
+          <span class="detail-label">Workspace:</span>
+          <span class="detail-value">{{ store.workspace }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">State:</span>
+          <span class="detail-value">{{ store.stateAbbr }}</span>
+        </div>
+        <div class="detail-row" v-if="getPlanningStateInfo()">
+          <span class="detail-label">Sites:</span>
+          <span class="detail-value">{{ getPlanningStateInfo()?.site_count || 'N/A' }}</span>
+        </div>
+        <div class="detail-row" v-if="getPlanningStateInfo()?.cluster_count">
+          <span class="detail-label">Clusters:</span>
+          <span class="detail-value">{{ getPlanningStateInfo().cluster_count }}</span>
+        </div>
+      </div>
+      <p class="loading-estimate">This may take 2-3 minutes for large datasets.</p>
     </div>
     
     <div v-if="store.error" class="error">
@@ -128,6 +172,24 @@
       :plan-request="store.planRequest"
       @close="showErrorDialog = false"
     />
+
+    <!-- Geocode Error Modal -->
+    <GeocodeErrorModal
+      :is-open="showErrorModal"
+      :workspace-name="store.workspace"
+      :state-name="errorModalState"
+      @close="showErrorModal = false"
+      @updated="handleErrorsUpdated"
+    />
+
+    <!-- Geocode Editor Modal -->
+    <GeocodeEditorModal
+      :is-open="showEditorModal"
+      :workspace-name="store.workspace"
+      :state-name="editorModalState"
+      @close="showEditorModal = false"
+      @updated="handleEditorUpdated"
+    />
   </div>
 </template>
 
@@ -139,10 +201,20 @@ import { useRouter } from 'vue-router'
 import PlanningForm from '../components/PlanningForm.vue'
 import ExcelUploadModal from '../components/ExcelUploadModal.vue'
 import PlanningErrorDialog from '../components/PlanningErrorDialog.vue'
+import GeocodeErrorModal from '../components/GeocodeErrorModal.vue'
+import GeocodeEditorModal from '../components/GeocodeEditorModal.vue'
 
 const store = usePlanningStore()
 const router = useRouter()
 const stateInput = ref('')
+
+// Geocode error modal state
+const showErrorModal = ref(false)
+const errorModalState = ref('')
+
+// Geocode editor modal state
+const showEditorModal = ref(false)
+const editorModalState = ref('')
 const availableStates = ref([])
 const loadingStates = ref(false)
 const excelComplete = ref(false)
@@ -308,6 +380,41 @@ function updateState() {
   }
 }
 
+function openErrorModal(stateName) {
+  errorModalState.value = stateName
+  showErrorModal.value = true
+}
+
+async function handleErrorsUpdated() {
+  // Refresh the state list to update error counts
+  if (store.workspace) {
+    await loadStates(store.workspace)
+  }
+}
+
+function getPlanningStateInfo() {
+  // Get the state info for the currently selected state
+  if (!store.stateAbbr) return null
+  return availableStates.value.find(s => s.name === store.stateAbbr)
+}
+
+function openEditorModal() {
+  // Use the currently selected state, or first available state
+  const state = store.stateAbbr || (availableStates.value.length > 0 ? availableStates.value[0].name : '')
+  if (state) {
+    editorModalState.value = state
+    showEditorModal.value = true
+  }
+}
+
+async function handleEditorUpdated() {
+  // Refresh the state list after editing a site
+  // This ensures any changes are reflected in the UI
+  if (store.workspace) {
+    await loadStates(store.workspace)
+  }
+}
+
 async function handlePlanSubmit() {
   try {
     console.log('handlePlanSubmit: Starting plan submission')
@@ -445,8 +552,39 @@ h2 {
 }
 
 .excel-button.incomplete .status-icon {
-  background: #f59e0b;
-  color: white;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.btn-editor {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-editor:hover:not(:disabled) {
+  border-color: #1e3a8a;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.btn-editor:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-editor .icon {
+  font-size: 1.2rem;
 }
 
 .button-text {
@@ -589,6 +727,16 @@ h2 {
   font-size: 0.85rem;
 }
 
+.error-count.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.error-count.clickable:hover {
+  background: #fecaca;
+  transform: scale(1.05);
+}
+
 .no-errors {
   color: #10b981;
   font-weight: 600;
@@ -643,11 +791,75 @@ h2 {
 
 .loading {
   margin-top: 2rem;
-  padding: 1rem;
+  padding: 2rem;
   background: #dbeafe;
-  border-radius: 6px;
-  text-align: center;
+  border-radius: 8px;
+  border: 2px solid #3b82f6;
+}
+
+.loading-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.loading-header h3 {
+  margin: 0;
   color: #1e40af;
+  font-size: 1.25rem;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 4px solid #bfdbfe;
+  border-top-color: #1e40af;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-details {
+  background: white;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.detail-value {
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.loading-estimate {
+  margin: 0;
+  color: #1e40af;
+  font-size: 0.9rem;
+  font-style: italic;
 }
 
 .error {

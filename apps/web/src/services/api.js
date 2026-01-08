@@ -115,6 +115,31 @@ export const geocodeAPI = {
       workspace_name: workspaceName,
       state_abbr: stateAbbr
     })
+  },
+  
+  // Get geocoding errors for a state
+  getErrors(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/geocode-errors/${stateAbbr}`)
+  },
+  
+  // Retry geocoding a single corrected address
+  retryAddress(workspaceName, stateAbbr, addressData) {
+    return api.post(`/workspaces/${workspaceName}/geocode-errors/${stateAbbr}/retry`, addressData)
+  },
+  
+  // Delete a geocoding error
+  deleteError(workspaceName, stateAbbr, siteId) {
+    return api.delete(`/workspaces/${workspaceName}/geocode-errors/${stateAbbr}/${siteId}`)
+  },
+  
+  // Get a single geocoded site by site_id
+  getSite(workspaceName, stateAbbr, siteId) {
+    return api.get(`/workspaces/${workspaceName}/geocoded/${stateAbbr}/${siteId}`)
+  },
+  
+  // Update a geocoded site's address and coordinates
+  updateSite(workspaceName, stateAbbr, siteId, siteData) {
+    return api.put(`/workspaces/${workspaceName}/geocoded/${stateAbbr}/${siteId}`, siteData)
   }
 }
 
