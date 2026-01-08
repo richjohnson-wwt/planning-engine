@@ -127,7 +127,17 @@ const latestMapUrl = computed(() => {
   
   // Find the most recent map file (files are already sorted by modified time, newest first)
   const latestMap = outputFiles.value.find(file => file.type === 'map')
-  return latestMap ? latestMap.url : null
+  
+  if (!latestMap) return null
+  
+  // Append authentication token to URL for iframe loading
+  const token = localStorage.getItem('auth_token')
+  if (token) {
+    const separator = latestMap.url.includes('?') ? '&' : '?'
+    return `${latestMap.url}${separator}token=${token}`
+  }
+  
+  return latestMap.url
 })
 
 function formatDate(dateStr) {

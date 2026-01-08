@@ -9,6 +9,65 @@ const api = axios.create({
   }
 })
 
+// Add request interceptor to include auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Add response interceptor to handle 401 errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear auth data and redirect to login
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('username')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
+// Authentication API
+export const authAPI = {
+  login(username, password) {
+    return api.post('/auth/login', { username, password })
+  },
+  
+  logout() {
+    return api.post('/auth/logout')
+  },
+  
+  getCurrentUser() {
+    return api.get('/auth/me')
+  },
+  
+  listUsers() {
+    return api.get('/auth/users')
+  },
+  
+  createUser(username, password, isAdmin = false) {
+    return api.post('/auth/users', {
+      username,
+      password,
+      is_admin: isAdmin
+    })
+  },
+  
+  deleteUser(username) {
+    return api.delete(`/auth/users/${username}`)
+  }
+}
+
 // Workspace API
 export const workspaceAPI = {
   create(workspaceName) {

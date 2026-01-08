@@ -31,6 +31,7 @@ export const usePlanningStore = defineStore('planning', () => {
   // State - initialize from localStorage
   const workspace = ref(loadFromStorage(STORAGE_KEY_WORKSPACE))
   const stateAbbr = ref(loadFromStorage(STORAGE_KEY_STATE))
+  const user = ref(localStorage.getItem('username') || null)
   
   console.log('Planning store initialized')
   console.log('Loaded workspace from localStorage:', workspace.value)
@@ -96,6 +97,17 @@ export const usePlanningStore = defineStore('planning', () => {
     error.value = err
   }
 
+  function setUser(username) {
+    user.value = username
+  }
+
+  function logout() {
+    user.value = null
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('username')
+    reset()
+  }
+
   function reset() {
     workspace.value = ''
     stateAbbr.value = ''
@@ -109,12 +121,15 @@ export const usePlanningStore = defineStore('planning', () => {
   return {
     workspace,
     stateAbbr,
+    user,
     planRequest,
     planResult,
     loading,
     error,
     setWorkspace,
     setStateAbbr,
+    setUser,
+    logout,
     updatePlanRequest,
     setPlanResult,
     setLoading,

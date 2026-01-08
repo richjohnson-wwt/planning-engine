@@ -39,13 +39,15 @@ def test_new_workspace_sanitizes_name():
         assert ".." not in str(workspace_path)
         assert "/" not in workspace_path.name  # No slashes in the final directory name
         assert workspace_path.name == "testetcpasswd"
-        # Verify it's under data/workspace
-        assert "data/workspace" in str(workspace_path)
+        # Verify it's under workspace directory (context-based path)
+        assert "workspace" in str(workspace_path)
         
     finally:
-        # Cleanup
-        if Path("data/workspace").exists():
+        # Cleanup - handle both old and new path structures
+        if Path("data/workspace/testetcpasswd").exists():
             shutil.rmtree("data/workspace/testetcpasswd", ignore_errors=True)
+        if Path("workspace/testetcpasswd").exists():
+            shutil.rmtree("workspace/testetcpasswd", ignore_errors=True)
 
 
 def test_new_workspace_empty_name_raises_error():

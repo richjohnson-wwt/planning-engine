@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,17 @@ import warnings
 import logging
 import json
 import tempfile
+from datetime import timedelta
+
+# Import authentication utilities
+from auth import (
+    authenticate_user, create_access_token, get_current_user, get_current_user_optional_token,
+    get_current_admin_user, create_user, delete_user, list_users, User, UserInDB,
+    Token, LoginRequest, CreateUserRequest, ACCESS_TOKEN_EXPIRE_DAYS
+)
+
+# Import context management for user-scoped workspaces
+from planning_engine.paths import set_current_username, clear_current_username
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +47,106 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/login", response_model=Token)
+def login(login_request: LoginRequest):
+    """
+    Login endpoint - returns JWT token with long expiration (90 days).
+    
+    Default admin credentials:
+    - username: admin
+    - password: admin123
+    """
+    user = authenticate_user(login_request.username, login_request.password)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
+    
+    # Create access token with long expiration
+    access_token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        username=user.username
+    )
+
+
+@app.post("/auth/logout")
+def logout(current_user: UserInDB = Depends(get_current_user)):
+    """
+    Logout endpoint - client should discard the token.
+    Server doesn't track tokens, so this is just for client-side cleanup.
+    """
+    return {"message": "Logged out successfully"}
+
+
+@app.get("/auth/me", response_model=User)
+def get_current_user_info(current_user: UserInDB = Depends(get_current_user)):
+    """Get current authenticated user information."""
+    return current_user
+
+
+@app.get("/auth/users", response_model=list[User])
+def get_users(current_user: UserInDB = Depends(get_current_admin_user)):
+    """List all users (admin only)."""
+    return list_users()
+
+
+@app.post("/auth/users", response_model=User)
+def create_new_user(
+    user_request: CreateUserRequest,
+    current_user: UserInDB = Depends(get_current_admin_user)
+):
+    """Create a new user (admin only)."""
+    try:
+        user = create_user(
+            username=user_request.username,
+            password=user_request.password,
+            is_admin=user_request.is_admin
+        )
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/auth/users/{username}")
+def delete_user_endpoint(
+    username: str,
+    current_user: UserInDB = Depends(get_current_admin_user)
+):
+    """Delete a user (admin only)."""
+    if username == current_user.username:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    try:
+        success = delete_user(username)
+        if not success:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"message": f"User '{username}' deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Dependency to set username context for all authenticated requests
+async def set_user_context(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
+    """Set the username context for user-scoped workspace paths."""
+    set_current_username(current_user.username)
+    return current_user
+
+
+# ============================================================================
+# Workspace and Data Endpoints (now require authentication)
+# ============================================================================
 
 class WorkspaceRequest(BaseModel):
     workspace_name: str
@@ -123,32 +234,38 @@ class ClusterResponse(BaseModel):
 
 
 @app.get("/workspaces")
-def list_workspaces():
-    """List all existing workspaces"""
+def list_workspaces(current_user: UserInDB = Depends(set_user_context)):
+    """List all existing workspaces for the authenticated user"""
     logger = logging.getLogger(__name__)
-    workspace_dir = get_project_root() / "data" / "workspace"
-    logger.info(f"Listing workspaces from: {workspace_dir}")
     
+    # Workspace directory is automatically user-scoped via context
+    workspace_dir = get_project_root() / "workspace"
+    logger.info(f"Listing workspaces for user '{current_user.username}' from: {workspace_dir}")
+    
+    # Create the workspace directory if it doesn't exist
     if not workspace_dir.exists():
-        logger.warning(f"Workspace directory does not exist: {workspace_dir}")
+        logger.info(f"Creating workspace directory for user '{current_user.username}': {workspace_dir}")
+        workspace_dir.mkdir(parents=True, exist_ok=True)
         return {"workspaces": []}
     
-    # Get all subdirectories in data/workspace
+    # Get all subdirectories in user's workspace directory
     workspaces = [
         d.name for d in workspace_dir.iterdir() 
         if d.is_dir() and not d.name.startswith('.')
     ]
     
-    logger.info(f"Found {len(workspaces)} workspaces: {workspaces}")
+    logger.info(f"Found {len(workspaces)} workspaces for user '{current_user.username}': {workspaces}")
     return {"workspaces": sorted(workspaces)}
 
 
 @app.get("/workspaces/{workspace_name}/states")
-def list_workspace_states(workspace_name: str):
+def list_workspace_states(workspace_name: str, current_user: UserInDB = Depends(set_user_context)):
     """List all state subdirectories with detailed information (site count, geocode status, cluster count, error count)"""
     import pandas as pd
+    from planning_engine.core.workspace import get_workspace_path
     
-    workspace_path = get_project_root() / "data" / "workspace" / workspace_name
+    # Use context-based workspace path (automatically user-scoped)
+    workspace_path = get_workspace_path(workspace_name)
     input_dir = workspace_path / "input"
     cache_dir = workspace_path / "cache"
     
@@ -213,10 +330,10 @@ def list_workspace_states(workspace_name: str):
 
 
 @app.post("/workspace", response_model=WorkspaceResponse)
-def create_workspace(request: WorkspaceRequest):
+def create_workspace(request: WorkspaceRequest, current_user: UserInDB = Depends(set_user_context)):
     """Create a new workspace for organizing planning workflows"""
     logger = logging.getLogger(__name__)
-    logger.info(f"Creating workspace: {request.workspace_name}")
+    logger.info(f"Creating workspace '{request.workspace_name}' for user '{current_user.username}'")
     
     workspace_path = new_workspace(request.workspace_name)
     logger.info(f"Workspace created at: {workspace_path}")
@@ -228,7 +345,7 @@ def create_workspace(request: WorkspaceRequest):
 
 
 @app.post("/parse-excel", response_model=ParseExcelResponse)
-def parse_excel_file(request: ParseExcelRequest):
+def parse_excel_file(request: ParseExcelRequest, current_user: UserInDB = Depends(set_user_context)):
     """Parse an Excel file and map columns to standard fields, organized by state"""
     state_files = parse_excel(
         workspace_name=request.workspace_name,
@@ -253,6 +370,7 @@ async def parse_excel_upload(
     file: UploadFile = File(...),
     workspace_name: str = Form(...),
     sheet_name: str = Form(""),
+    current_user: UserInDB = Depends(set_user_context),
     column_mapping: str = Form(...)
 ):
     """Parse an uploaded Excel file and map columns to standard fields, organized by state"""
@@ -291,7 +409,7 @@ async def parse_excel_upload(
 
 
 @app.post("/geocode", response_model=GeocodeResponse)
-def geocode_addresses(request: GeocodeRequest):
+def geocode_addresses(request: GeocodeRequest, current_user: UserInDB = Depends(set_user_context)):
     """Geocode addresses from workspace's state-specific addresses.csv file"""
     import pandas as pd
     from pathlib import Path
@@ -332,7 +450,7 @@ def geocode_addresses(request: GeocodeRequest):
 
 
 @app.post("/cluster", response_model=ClusterResponse)
-def cluster_sites(request: ClusterRequest):
+def cluster_sites(request: ClusterRequest, current_user: UserInDB = Depends(set_user_context)):
     """Cluster geocoded sites based on geographic coordinates"""
     import pandas as pd
     output_path = cluster(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
@@ -351,7 +469,7 @@ def cluster_sites(request: ClusterRequest):
 
 
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/cluster-info")
-def get_cluster_info_endpoint(workspace_name: str, state_abbr: str):
+def get_cluster_info_endpoint(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Get cluster information for a workspace and state.
     
@@ -370,7 +488,7 @@ def get_cluster_info_endpoint(workspace_name: str, state_abbr: str):
 
 
 @app.post("/plan", response_model=PlanResult)
-def run_plan(request: PlanRequest):
+def run_plan(request: PlanRequest, current_user: UserInDB = Depends(set_user_context)):
     """
     Plan routes for teams/crews to visit sites.
     
@@ -407,8 +525,12 @@ def run_plan(request: PlanRequest):
     
     # Save results to workspace output folder organized by state
     if request.workspace and request.state_abbr:
+        from planning_engine.core.workspace import get_workspace_path
+        
         # Create state-specific output directory (matching cache structure)
-        output_dir = get_project_root() / "data" / "workspace" / request.workspace / "output" / request.state_abbr
+        # Use context-based workspace path (automatically user-scoped)
+        workspace_path = get_workspace_path(request.workspace)
+        output_dir = workspace_path / "output" / request.state_abbr
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Add timestamp to filename for versioning
@@ -469,7 +591,7 @@ def run_plan(request: PlanRequest):
 
 
 @app.get("/workspaces/{workspace_name}/output/{state_abbr}/latest")
-def get_latest_result(workspace_name: str, state_abbr: str):
+def get_latest_result(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Get the latest planning result JSON for a workspace and state.
     
@@ -478,7 +600,11 @@ def get_latest_result(workspace_name: str, state_abbr: str):
     NOTE: This route must be defined BEFORE the /{filename} route to avoid
     FastAPI matching "latest" as a filename.
     """
-    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    from planning_engine.core.workspace import get_workspace_path
+    
+    # Use context-based workspace path (automatically user-scoped)
+    workspace_path = get_workspace_path(workspace_name)
+    output_dir = workspace_path / "output" / state_abbr
     
     if not output_dir.exists():
         return {"error": "No results found", "result": None}
@@ -509,16 +635,28 @@ def get_latest_result(workspace_name: str, state_abbr: str):
 
 
 @app.get("/workspaces/{workspace_name}/output/{state_abbr}/{filename}")
-def get_output_file(workspace_name: str, state_abbr: str, filename: str):
+async def get_output_file(
+    workspace_name: str, 
+    state_abbr: str, 
+    filename: str, 
+    token: str = None,
+    current_user: UserInDB = Depends(get_current_user_optional_token)
+):
     """
     Serve output files (HTML maps, JSON results) from workspace output directory.
     
-    Example: GET /workspaces/foo/output/LA/route_map_20231223_120000.html
+    Supports both Authorization header and ?token=xxx query parameter for HTML files.
+    Example: GET /workspaces/foo/output/LA/route_map_20231223_120000.html?token=xxx
     """
     import os
+    from planning_engine.core.workspace import get_workspace_path
     
-    # Construct the file path
-    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    # Set username context for user-scoped paths
+    set_current_username(current_user.username)
+    
+    # Construct the file path using context-based workspace path
+    workspace_path = get_workspace_path(workspace_name)
+    output_dir = workspace_path / "output" / state_abbr
     file_path = output_dir / filename
     
     # Security check: ensure the resolved path is within the output directory
@@ -541,13 +679,17 @@ def get_output_file(workspace_name: str, state_abbr: str, filename: str):
 
 
 @app.get("/workspaces/{workspace_name}/output/{state_abbr}")
-def list_output_files(workspace_name: str, state_abbr: str):
+def list_output_files(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     List all output files for a workspace and state.
     
     Returns a list of available HTML maps and JSON result files.
     """
-    output_dir = get_project_root() / "data" / "workspace" / workspace_name / "output" / state_abbr
+    from planning_engine.core.workspace import get_workspace_path
+    
+    # Use context-based workspace path (automatically user-scoped)
+    workspace_path = get_workspace_path(workspace_name)
+    output_dir = workspace_path / "output" / state_abbr
     
     if not output_dir.exists():
         return {"files": []}
@@ -574,7 +716,7 @@ def list_output_files(workspace_name: str, state_abbr: str):
 # ============================================================================
 
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams")
-def list_teams(workspace_name: str, state_abbr: str):
+def list_teams(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     List all teams for a workspace and state.
     
@@ -591,7 +733,7 @@ def list_teams(workspace_name: str, state_abbr: str):
 
 
 @app.post("/workspaces/{workspace_name}/states/{state_abbr}/teams")
-def create_team(workspace_name: str, state_abbr: str, team: dict):
+def create_team(workspace_name: str, state_abbr: str, team: dict, current_user: UserInDB = Depends(set_user_context)):
     """
     Create a new team for a workspace and state.
     
@@ -625,7 +767,7 @@ def create_team(workspace_name: str, state_abbr: str, team: dict):
 
 
 @app.put("/workspaces/{workspace_name}/states/{state_abbr}/teams/{team_id}")
-def update_team_endpoint(workspace_name: str, state_abbr: str, team_id: str, team: dict):
+def update_team_endpoint(workspace_name: str, state_abbr: str, team_id: str, team: dict, current_user: UserInDB = Depends(set_user_context)):
     """
     Update an existing team.
     """
@@ -651,7 +793,7 @@ def update_team_endpoint(workspace_name: str, state_abbr: str, team_id: str, tea
 
 
 @app.delete("/workspaces/{workspace_name}/states/{state_abbr}/teams/{team_id}")
-def delete_team_endpoint(workspace_name: str, state_abbr: str, team_id: str):
+def delete_team_endpoint(workspace_name: str, state_abbr: str, team_id: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Delete a team.
     """
@@ -670,7 +812,7 @@ def delete_team_endpoint(workspace_name: str, state_abbr: str, team_id: str):
 
 
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams/generate-id")
-def generate_team_id_endpoint(workspace_name: str, state_abbr: str):
+def generate_team_id_endpoint(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Generate a unique team ID for a state.
     
@@ -686,7 +828,7 @@ def generate_team_id_endpoint(workspace_name: str, state_abbr: str):
 
 
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/cities")
-def get_cities(workspace_name: str, state_abbr: str):
+def get_cities(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Get list of available cities for a state from geocoded data.
     Used to populate city dropdown when creating teams.
@@ -701,7 +843,7 @@ def get_cities(workspace_name: str, state_abbr: str):
 
 
 @app.get("/workspaces/{workspace_name}/states/{state_abbr}/planning-team-ids")
-def get_planning_team_ids(workspace_name: str, state_abbr: str):
+def get_planning_team_ids(workspace_name: str, state_abbr: str, current_user: UserInDB = Depends(set_user_context)):
     """
     Get unique Team IDs from the latest planning result for a state.
     Used to populate Team ID dropdown when creating teams.
@@ -759,7 +901,7 @@ def get_planning_team_ids(workspace_name: str, state_abbr: str):
 # ============================================================================
 
 @app.get("/workspaces/{workspace_name}/progress")
-def get_progress(workspace_name: str, state: str = None):
+def get_progress(workspace_name: str, state: str = None, current_user: UserInDB = Depends(set_user_context)):
     """
     Get progress tracking data for a workspace.
     
@@ -781,7 +923,7 @@ def get_progress(workspace_name: str, state: str = None):
 
 
 @app.post("/workspaces/{workspace_name}/progress/init")
-def initialize_progress(workspace_name: str, force_refresh: bool = False):
+def initialize_progress(workspace_name: str, force_refresh: bool = False, current_user: UserInDB = Depends(set_user_context)):
     """
     Initialize progress tracking from geocoded sites.
     
@@ -808,7 +950,7 @@ def initialize_progress(workspace_name: str, force_refresh: bool = False):
 
 
 @app.put("/workspaces/{workspace_name}/progress/{site_id}")
-def update_progress(workspace_name: str, site_id: str, update_data: dict):
+def update_progress(workspace_name: str, site_id: str, update_data: dict, current_user: UserInDB = Depends(set_user_context)):
     """
     Update progress for a single site.
     
@@ -846,7 +988,7 @@ def update_progress(workspace_name: str, site_id: str, update_data: dict):
 
 
 @app.put("/workspaces/{workspace_name}/progress/bulk")
-def bulk_update_progress_endpoint(workspace_name: str, update_data: dict):
+def bulk_update_progress_endpoint(workspace_name: str, update_data: dict, current_user: UserInDB = Depends(set_user_context)):
     """
     Bulk update progress for multiple sites.
     
