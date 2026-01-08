@@ -207,6 +207,7 @@ class SiteProgress(BaseModel):
     notes: str = ""
     state: str  # State abbreviation for filtering
     city: str = ""  # City name for context
+    street1: str = ""  # Street address for display
     cluster_id: Optional[int] = None  # Cluster assignment for grouping
     last_updated: Optional[str] = None  # ISO timestamp
     

@@ -107,6 +107,11 @@ def initialize_progress_from_geocoded(workspace_name: str, force_refresh: bool =
                 if pd.isna(city):
                     city = ''
                 
+                # Extract street1 from geocoded data
+                street1 = row.get('street1', '')
+                if pd.isna(street1):
+                    street1 = ''
+                
                 # Get cluster_id from cluster_map if available
                 cluster_id = cluster_map.get(site_id, None)
                 
@@ -119,6 +124,7 @@ def initialize_progress_from_geocoded(workspace_name: str, force_refresh: bool =
                     'notes': '',
                     'state': state_abbr,
                     'city': city,
+                    'street1': street1,
                     'cluster_id': cluster_id,
                     'last_updated': current_time
                 })
@@ -196,9 +202,12 @@ def load_progress(workspace_name: str, state_filter: Optional[str] = None) -> Pr
                     progress_data[date_field] = None
             
             # Handle optional string fields
-            for field in ['crew_assigned', 'notes', 'last_updated', 'city']:
+            for field in ['crew_assigned', 'notes', 'last_updated', 'city', 'street1']:
                 if field in progress_data and pd.isna(progress_data[field]):
-                    progress_data[field] = "" if field in ['notes', 'city'] else None
+                    progress_data[field] = "" if field in ['notes', 'city', 'street1'] else None
+                elif field not in progress_data:
+                    # For backward compatibility with old progress.csv files
+                    progress_data[field] = "" if field in ['notes', 'city', 'street1'] else None
             
             # Handle cluster_id (convert to int or None)
             if 'cluster_id' in progress_data:
@@ -241,7 +250,7 @@ def save_progress(workspace_name: str, progress_list: List[SiteProgress]) -> Pat
         # If no progress, create empty file with headers
         df = pd.DataFrame(columns=[
             'site_id', 'status', 'completed_date', 'crew_assigned',
-            'notes', 'state', 'city', 'cluster_id', 'last_updated'
+            'notes', 'state', 'city', 'street1', 'cluster_id', 'last_updated'
         ])
     else:
         # Convert progress to DataFrame

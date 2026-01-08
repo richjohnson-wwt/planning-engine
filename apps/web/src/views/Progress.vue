@@ -137,7 +137,7 @@
                 />
               </th>
               <th>Site ID</th>
-              <th>State</th>
+              <th>Street Address</th>
               <th>City</th>
               <th>Cluster</th>
               <th>Status</th>
@@ -158,7 +158,7 @@
                 />
               </td>
               <td class="site-id">{{ site.site_id }}</td>
-              <td class="state">{{ site.state }}</td>
+              <td class="street-address">{{ site.street1 || '-' }}</td>
               <td class="city">{{ site.city || '-' }}</td>
               <td class="cluster">{{ site.cluster_id !== null ? `Cluster ${site.cluster_id + 1}` : '-' }}</td>
               <td>
@@ -180,7 +180,7 @@
                 </select>
               </td>
               <td class="crew">
-                <span v-if="editingSite !== site.site_id">{{ site.crew_assigned || '-' }}</span>
+                <span v-if="editingSite !== site.site_id">{{ formatCrewAssignment(site.crew_assigned) }}</span>
                 <input 
                   v-else
                   v-model="editForm.crew_assigned"
@@ -232,7 +232,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { usePlanningStore } from '../stores/planning'
-import { workspaceAPI, progressAPI } from '../services/api'
+import { workspaceAPI, progressAPI, teamAPI } from '../services/api'
 
 const store = usePlanningStore()
 
@@ -240,6 +240,7 @@ const store = usePlanningStore()
 const selectedState = ref('')
 const availableStates = ref([])
 const progressData = ref(null)
+const teamsData = ref([])
 const loading = ref(false)
 const loadingStates = ref(false)
 const initializing = ref(false)
@@ -287,12 +288,31 @@ async function loadProgress() {
     progressData.value = response.data
     
     console.log('Progress data loaded:', progressData.value)
+    
+    // Load teams data for the selected state if available
+    if (selectedState.value) {
+      await loadTeams()
+    }
   } catch (err) {
     console.error('Failed to load progress:', err)
     error.value = 'Failed to load progress data'
     progressData.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function loadTeams() {
+  if (!store.workspace || !selectedState.value) return
+  
+  try {
+    const response = await teamAPI.list(store.workspace, selectedState.value)
+    teamsData.value = response.data.teams || []
+    console.log('Teams data loaded:', teamsData.value)
+  } catch (err) {
+    console.error('Failed to load teams:', err)
+    // Don't set error - teams are optional
+    teamsData.value = []
   }
 }
 
@@ -348,6 +368,32 @@ function formatTimestamp(timestamp) {
   } catch {
     return timestamp
   }
+}
+
+function formatCrewAssignment(crewAssigned) {
+  if (!crewAssigned) return '-'
+  
+  // Try to find matching team in teamsData
+  // First try exact match
+  let team = teamsData.value.find(t => t.team_id === crewAssigned)
+  
+  // If no exact match, try extracting number from crew_assigned (e.g., 'Team-1' -> '1')
+  if (!team && crewAssigned.includes('-')) {
+    const extractedId = crewAssigned.split('-').pop()
+    team = teamsData.value.find(t => t.team_id === extractedId || t.team_id === parseInt(extractedId))
+  }
+  
+  // If still no match, try treating crew_assigned as a number
+  if (!team && !isNaN(crewAssigned)) {
+    team = teamsData.value.find(t => t.team_id === parseInt(crewAssigned) || t.team_id === crewAssigned.toString())
+  }
+  
+  if (team && team.team_name) {
+    return `${crewAssigned} (${team.team_name})`
+  }
+  
+  // If no match found, return the crew_assigned value as-is
+  return crewAssigned
 }
 
 // Bulk selection methods
@@ -741,9 +787,13 @@ h2 {
   font-weight: 500;
 }
 
-.state {
-  font-weight: 600;
-  color: #1e3a8a;
+.street-address {
+  color: #374151;
+  font-size: 0.9rem;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .city {
