@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from typing import List, Optional
 from datetime import time, date
 
@@ -51,8 +51,17 @@ class TeamDay(BaseModel):
     # Optional team label for display (e.g., "C1-T1" for cluster 1, team 1)
     team_label: Optional[str] = None
     
+    @field_serializer('date')
+    def serialize_date(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
+    
     model_config = {
-        "json_schema_serialization_defaults_required": True
+        "json_schema_serialization_defaults_required": True,
+        "ser_json_timedelta": "iso8601",
+        "ser_json_bytes": "base64"
     }
 
 
@@ -94,6 +103,18 @@ class PlanRequest(BaseModel):
     service_minutes_per_site: int = 60
     fast_mode: bool = False  # If True, use faster but less optimal solver settings
 
+    @field_serializer('start_date', 'end_date')
+    def serialize_dates(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
+    
+    @field_serializer('holidays')
+    def serialize_holidays(self, dates: List[date], _info):
+        """Serialize list of dates to ISO format strings."""
+        return [d.isoformat() for d in dates]
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -131,6 +152,13 @@ class PlanResult(BaseModel):
     unassigned: int = 0  # number of sites not scheduled
     start_date: Optional[date] = None  # Actual start date used in planning
     end_date: Optional[date] = None  # Calculated end date (for fixed crew mode)
+    
+    @field_serializer('start_date', 'end_date')
+    def serialize_dates(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
 
 class CalendarPlanResult(BaseModel):
     start_date: date
@@ -166,6 +194,13 @@ class Team(BaseModel):
     availability_end: Optional[date] = None
     notes: str = ""
     created_date: Optional[date] = None
+    
+    @field_serializer('availability_start', 'availability_end', 'created_date')
+    def serialize_dates(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
     
     model_config = {
         "json_schema_extra": {
@@ -211,6 +246,13 @@ class SiteProgress(BaseModel):
     cluster_id: Optional[int] = None  # Cluster assignment for grouping
     last_updated: Optional[str] = None  # ISO timestamp
     
+    @field_serializer('completed_date')
+    def serialize_date(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
+    
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -235,6 +277,13 @@ class ProgressBulkUpdate(BaseModel):
     crew_assigned: Optional[str] = None
     notes: Optional[str] = None
     completed_date: Optional[date] = None
+    
+    @field_serializer('completed_date')
+    def serialize_date(self, dt: Optional[date], _info):
+        """Serialize date to ISO format string."""
+        if dt is None:
+            return None
+        return dt.isoformat()
 
 
 class ProgressInitRequest(BaseModel):

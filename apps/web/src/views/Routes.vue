@@ -49,11 +49,11 @@
             <div class="config-content">
               <div class="config-row">
                 <span class="config-label">Start Date:</span>
-                <span class="config-value">{{ formatDate(store.planRequest.start_date) || 'Not set' }}</span>
+                <span class="config-value">{{ formatDate(displayStartDate) || 'Not set' }}</span>
               </div>
-              <div v-if="store.planRequest.end_date" class="config-row">
+              <div v-if="displayEndDate" class="config-row">
                 <span class="config-label">End Date:</span>
-                <span class="config-value">{{ formatDate(store.planRequest.end_date) }}</span>
+                <span class="config-value">{{ formatDate(displayEndDate) }}</span>
               </div>
               <div v-if="store.planRequest.holidays && store.planRequest.holidays.length > 0" class="config-row">
                 <span class="config-label">Holidays:</span>
@@ -70,8 +70,13 @@
             </div>
             <div class="config-content">
               <div class="config-row">
-                <span class="config-label">Teams:</span>
-                <span class="config-value-highlight">{{ store.planRequest.team_config?.teams || 0 }}</span>
+                <span class="config-label">
+                  {{ isFixedCalendar ? 'Crews Needed:' : 'Teams:' }}
+                </span>
+                <span class="config-value-highlight">{{ displayTeamCount }}</span>
+              </div>
+              <div v-if="isFixedCalendar" class="config-row">
+                <span class="config-note">Minimum crews calculated to meet deadline</span>
               </div>
               <div v-if="store.planRequest.use_clusters" class="config-row">
                 <span class="config-label">Clustering:</span>
@@ -268,6 +273,53 @@ const totalSites = computed(() => {
   return store.planResult.team_days.reduce((sum, td) => sum + (td.site_ids?.length || 0), 0)
 })
 
+// Calculate actual number of crews used in the result
+const actualCrewsUsed = computed(() => {
+  if (!store.planResult?.team_days) return 0
+  // Use team_label for clustered plans (e.g., "C1-T1", "C2-T1"), fallback to team_id
+  const uniqueTeams = new Set(
+    store.planResult.team_days.map(td => td.team_label || td.team_id)
+  )
+  return uniqueTeams.size
+})
+
+// Check if this is a Fixed Calendar plan (has end_date in request or result metadata)
+const isFixedCalendar = computed(() => {
+  // Check planRequest first (for just-generated plans)
+  if (store.planRequest?.end_date) return true
+  
+  // Check result metadata (for loaded/old plans)
+  // The result from backend has structure: { metadata: {...}, result: { team_days: [...] } }
+  // But store.planResult only stores the result.team_days part
+  // So we need to check if any team_day has a date field (indicates multi-day/calendar planning)
+  if (store.planResult?.team_days && store.planResult.team_days.length > 0) {
+    // If team_days have dates, it's likely a calendar plan
+    return store.planResult.team_days.some(td => td.date !== null && td.date !== undefined)
+  }
+  
+  return false
+})
+
+// Get start date from either planRequest or planResult
+const displayStartDate = computed(() => {
+  return store.planRequest?.start_date || store.planResult?.start_date || null
+})
+
+// Get end date from either planRequest or planResult
+const displayEndDate = computed(() => {
+  return store.planRequest?.end_date || store.planResult?.end_date || null
+})
+
+// Get the team count to display (actual for Fixed Calendar, input for Fixed Crew)
+const displayTeamCount = computed(() => {
+  // For Fixed Calendar mode (has end_date), show actual crews used
+  if (isFixedCalendar.value) {
+    return actualCrewsUsed.value
+  }
+  // For Fixed Crew mode, show input team count
+  return store.planRequest?.team_config?.teams || 0
+})
+
 // Get workspace and state from planRequest (which is populated when planning)
 const workspaceFromResult = computed(() => {
   return store.planRequest?.workspace || store.workspace
@@ -279,18 +331,15 @@ const stateFromResult = computed(() => {
 
 // Planning mode display
 const planningModeLabel = computed(() => {
-  if (!store.planRequest) return 'Unknown'
-  // Fixed Calendar mode has an end_date, Fixed Crew mode does not
-  return store.planRequest.end_date ? 'Fixed Calendar' : 'Fixed Crew'
+  return isFixedCalendar.value ? 'Fixed Calendar' : 'Fixed Crew'
 })
 
 const planningModeClass = computed(() => {
-  return store.planRequest?.end_date ? 'mode-calendar' : 'mode-crew'
+  return isFixedCalendar.value ? 'mode-calendar' : 'mode-crew'
 })
 
 const planningModeDescription = computed(() => {
-  if (!store.planRequest) return ''
-  return store.planRequest.end_date 
+  return isFixedCalendar.value
     ? 'System calculated minimum crews needed to complete by end date'
     : 'System calculated completion time with specified number of crews'
 })
@@ -777,6 +826,14 @@ h2 {
   font-size: 0.85rem;
   color: #6b7280;
   line-height: 1.4;
+}
+
+.config-note {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
+  display: block;
+  width: 100%;
 }
 
 .summary-cards {
