@@ -192,7 +192,7 @@ def load_progress(workspace_name: str, state_filter: Optional[str] = None) -> Pr
                 progress_data['site_id'] = str(progress_data['site_id'])
             
             # Handle date fields
-            for date_field in ['completed_date']:
+            for date_field in ['scheduled_date']:
                 if date_field in progress_data and pd.notna(progress_data[date_field]):
                     try:
                         progress_data[date_field] = pd.to_datetime(progress_data[date_field]).date()
@@ -267,7 +267,7 @@ def update_site_progress(
     workspace_name: str,
     site_id: str,
     status: Optional[str] = None,
-    completed_date: Optional[date] = None,
+    scheduled_date: Optional[date] = None,
     crew_assigned: Optional[str] = None,
     notes: Optional[str] = None
 ) -> SiteProgress:
@@ -277,7 +277,7 @@ def update_site_progress(
         workspace_name: Name of the workspace
         site_id: ID of the site to update
         status: New status (if provided)
-        completed_date: Completion date (if provided)
+        scheduled_date: Scheduled date (if provided)
         crew_assigned: Assigned crew/team (if provided)
         notes: Notes (if provided)
         
@@ -304,8 +304,8 @@ def update_site_progress(
     site = progress_list[site_index]
     if status is not None:
         site.status = status
-    if completed_date is not None:
-        site.completed_date = completed_date
+    if scheduled_date is not None:
+        site.scheduled_date = scheduled_date
     if crew_assigned is not None:
         site.crew_assigned = crew_assigned
     if notes is not None:
@@ -324,7 +324,7 @@ def bulk_update_progress(
     workspace_name: str,
     site_ids: List[str],
     status: Optional[str] = None,
-    completed_date: Optional[date] = None,
+    scheduled_date: Optional[date] = None,
     crew_assigned: Optional[str] = None,
     notes: Optional[str] = None
 ) -> int:
@@ -334,7 +334,7 @@ def bulk_update_progress(
         workspace_name: Name of the workspace
         site_ids: List of site IDs to update
         status: New status (if provided)
-        completed_date: Completion date (if provided)
+        scheduled_date: Scheduled date (if provided)
         crew_assigned: Assigned crew/team (if provided)
         notes: Notes (if provided)
         
@@ -352,8 +352,8 @@ def bulk_update_progress(
         if site.site_id in site_ids:
             if status is not None:
                 site.status = status
-            if completed_date is not None:
-                site.completed_date = completed_date
+            if scheduled_date is not None:
+                site.scheduled_date = scheduled_date
             if crew_assigned is not None:
                 site.crew_assigned = crew_assigned
             if notes is not None:
@@ -369,42 +369,58 @@ def bulk_update_progress(
 
 
 def sync_progress_with_plan_result(workspace_name: str, plan_result: dict) -> int:
-    """Sync progress.csv with planning results to auto-populate crew assignments.
+    """Sync progress.csv with planning results to auto-populate crew assignments and scheduled dates.
     
-    Called automatically after a planning run to update crew_assigned field
-    based on which team was assigned to each site in the plan.
+    Called automatically after a planning run to update crew_assigned and scheduled_date fields
+    based on which team was assigned to each site and when they are scheduled to visit.
     
     Args:
         workspace_name: Name of the workspace
         plan_result: Planning result dictionary with team_days
         
     Returns:
-        Number of sites updated with crew assignments
+        Number of sites updated with crew assignments and scheduled dates
     """
+    from datetime import date
+    
     response = load_progress(workspace_name)
     progress_list = response.progress
     
-    # Build mapping of site_id -> crew_assigned from plan result
-    site_to_crew = {}
+    # Build mapping of site_id -> (crew_assigned, scheduled_date) from plan result
+    site_to_info = {}
     
     team_days = plan_result.get('team_days', [])
     for team_day in team_days:
         crew_label = team_day.get('team_label') or f"Team-{team_day.get('team_id', 'Unknown')}"
         site_ids = team_day.get('site_ids', [])
+        scheduled_date_str = team_day.get('date')  # ISO format date string
+        
+        # Convert date string to date object if available
+        scheduled_date = None
+        if scheduled_date_str:
+            try:
+                scheduled_date = date.fromisoformat(scheduled_date_str)
+            except (ValueError, TypeError):
+                scheduled_date = None
         
         for site_id in site_ids:
-            site_to_crew[site_id] = crew_label
+            site_to_info[site_id] = {
+                'crew': crew_label,
+                'date': scheduled_date
+            }
     
-    if not site_to_crew:
+    if not site_to_info:
         return 0
     
-    # Update progress with crew assignments
+    # Update progress with crew assignments and scheduled dates
     current_time = datetime.now().isoformat()
     updated_count = 0
     
     for site in progress_list:
-        if site.site_id in site_to_crew:
-            site.crew_assigned = site_to_crew[site.site_id]
+        if site.site_id in site_to_info:
+            info = site_to_info[site.site_id]
+            site.crew_assigned = info['crew']
+            site.scheduled_date = info['date']
             site.last_updated = current_time
             updated_count += 1
     

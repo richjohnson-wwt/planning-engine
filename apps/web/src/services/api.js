@@ -208,6 +208,18 @@ export const teamAPI = {
   
   getPlanningTeamIds(workspaceName, stateAbbr) {
     return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/planning-team-ids`)
+  },
+  
+  generateSchedule(workspaceName, stateAbbr, teamId) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/teams/${teamId}/schedule`, {
+      responseType: 'blob'
+    })
+  },
+  
+  generateAllSchedules(workspaceName, stateAbbr) {
+    return api.get(`/workspaces/${workspaceName}/states/${stateAbbr}/teams/schedules/all`, {
+      responseType: 'blob'
+    })
   }
 }
 

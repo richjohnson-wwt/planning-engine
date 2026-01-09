@@ -237,7 +237,7 @@ class SiteProgress(BaseModel):
     """
     site_id: str
     status: str  # pending | in_progress | completed | blocked
-    completed_date: Optional[date] = None
+    scheduled_date: Optional[date] = None  # Date when site is scheduled to be visited
     crew_assigned: Optional[str] = None
     notes: str = ""
     state: str  # State abbreviation for filtering
@@ -246,7 +246,7 @@ class SiteProgress(BaseModel):
     cluster_id: Optional[int] = None  # Cluster assignment for grouping
     last_updated: Optional[str] = None  # ISO timestamp
     
-    @field_serializer('completed_date')
+    @field_serializer('scheduled_date')
     def serialize_date(self, dt: Optional[date], _info):
         """Serialize date to ISO format string."""
         if dt is None:
@@ -258,10 +258,10 @@ class SiteProgress(BaseModel):
             "examples": [
                 {
                     "site_id": "SITE001",
-                    "status": "completed",
-                    "completed_date": "2026-01-05",
+                    "status": "in_progress",
+                    "scheduled_date": "2026-01-15",
                     "crew_assigned": "Team-A",
-                    "notes": "Hardware installed successfully",
+                    "notes": "Scheduled for installation",
                     "state": "LA",
                     "last_updated": "2026-01-05T14:30:00"
                 }
@@ -276,9 +276,9 @@ class ProgressBulkUpdate(BaseModel):
     status: Optional[str] = None
     crew_assigned: Optional[str] = None
     notes: Optional[str] = None
-    completed_date: Optional[date] = None
+    scheduled_date: Optional[date] = None
     
-    @field_serializer('completed_date')
+    @field_serializer('scheduled_date')
     def serialize_date(self, dt: Optional[date], _info):
         """Serialize date to ISO format string."""
         if dt is None:

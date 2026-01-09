@@ -1341,6 +1341,129 @@ def get_planning_team_ids(workspace_name: str, state_abbr: str, current_user: Us
         return {"team_ids": [], "error": str(e)}
 
 
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams/{team_id}/schedule")
+async def generate_team_schedule(
+    workspace_name: str, 
+    state_abbr: str, 
+    team_id: str,
+    current_user: UserInDB = Depends(set_user_context)
+):
+    """
+    Generate a PDF schedule for a specific team.
+    
+    Returns the PDF file for download.
+    Requires that:
+    1. A planning result exists for the workspace/state
+    2. The team exists in teams.csv
+    3. The team has assigned routes in the planning result
+    """
+    from planning_engine.team_schedule import generate_team_schedule_pdf
+    from planning_engine.core.workspace import get_workspace_path
+    import tempfile
+    from datetime import datetime
+    
+    try:
+        # Create temporary file for PDF
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_dir = Path(tempfile.gettempdir())
+        pdf_filename = f"schedule_{team_id}_{timestamp}.pdf"
+        pdf_path = temp_dir / pdf_filename
+        
+        # Generate PDF
+        success = generate_team_schedule_pdf(
+            workspace_name,
+            state_abbr,
+            team_id,
+            pdf_path
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not generate schedule for team {team_id}. Check that planning results exist and team has assigned routes."
+            )
+        
+        # Return PDF file
+        return FileResponse(
+            path=str(pdf_path),
+            filename=pdf_filename,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={pdf_filename}"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate schedule: {str(e)}"
+        )
+
+
+@app.get("/workspaces/{workspace_name}/states/{state_abbr}/teams/schedules/all")
+async def generate_all_team_schedules(
+    workspace_name: str,
+    state_abbr: str,
+    current_user: UserInDB = Depends(set_user_context)
+):
+    """
+    Generate PDF schedules for all teams in a state.
+    
+    Returns a ZIP file containing all team schedule PDFs.
+    """
+    from planning_engine.team_schedule import generate_all_team_schedules
+    from planning_engine.core.workspace import get_workspace_path
+    import tempfile
+    import zipfile
+    from datetime import datetime
+    
+    try:
+        # Create temporary directory for PDFs
+        temp_dir = Path(tempfile.mkdtemp())
+        
+        # Generate all schedules
+        generated_files = generate_all_team_schedules(
+            workspace_name,
+            state_abbr,
+            output_dir=temp_dir
+        )
+        
+        if not generated_files:
+            raise HTTPException(
+                status_code=404,
+                detail="No schedules could be generated. Check that planning results and teams exist."
+            )
+        
+        # Create ZIP file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_filename = f"team_schedules_{state_abbr}_{timestamp}.zip"
+        zip_path = temp_dir / zip_filename
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for team_id, pdf_path in generated_files.items():
+                zipf.write(pdf_path, pdf_path.name)
+        
+        # Return ZIP file
+        return FileResponse(
+            path=str(zip_path),
+            filename=zip_filename,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={zip_filename}"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate schedules: {str(e)}"
+        )
+
+
 # ============================================================================
 # PROGRESS TRACKING ENDPOINTS
 # ============================================================================
@@ -1406,20 +1529,20 @@ def update_progress(workspace_name: str, site_id: str, update_data: dict, curren
     try:
         # Extract update fields
         status = update_data.get('status')
-        completed_date = update_data.get('completed_date')
+        scheduled_date = update_data.get('scheduled_date')
         crew_assigned = update_data.get('crew_assigned')
         notes = update_data.get('notes')
         
-        # Convert completed_date string to date if provided
-        if completed_date:
+        # Convert scheduled_date string to date if provided
+        if scheduled_date:
             from datetime import datetime
-            completed_date = datetime.fromisoformat(completed_date).date()
+            scheduled_date = datetime.fromisoformat(scheduled_date).date()
         
         updated_site = update_site_progress(
             workspace_name,
             site_id,
             status=status,
-            completed_date=completed_date,
+            scheduled_date=scheduled_date,
             crew_assigned=crew_assigned,
             notes=notes
         )
@@ -1440,7 +1563,7 @@ def bulk_update_progress_endpoint(workspace_name: str, update_data: dict, curren
     Request body should include:
     - site_ids: List of site IDs to update
     - status: Optional new status
-    - completed_date: Optional completion date
+    - scheduled_date: Optional scheduled date
     - crew_assigned: Optional crew assignment
     - notes: Optional notes
     """
@@ -1449,20 +1572,20 @@ def bulk_update_progress_endpoint(workspace_name: str, update_data: dict, curren
     try:
         site_ids = update_data.get('site_ids', [])
         status = update_data.get('status')
-        completed_date = update_data.get('completed_date')
+        scheduled_date = update_data.get('scheduled_date')
         crew_assigned = update_data.get('crew_assigned')
         notes = update_data.get('notes')
         
-        # Convert completed_date string to date if provided
-        if completed_date:
+        # Convert scheduled_date string to date if provided
+        if scheduled_date:
             from datetime import datetime
-            completed_date = datetime.fromisoformat(completed_date).date()
+            scheduled_date = datetime.fromisoformat(scheduled_date).date()
         
         updated_count = bulk_update_progress(
             workspace_name,
             site_ids,
             status=status,
-            completed_date=completed_date,
+            scheduled_date=scheduled_date,
             crew_assigned=crew_assigned,
             notes=notes
         )

@@ -58,8 +58,12 @@ def plan_with_clusters(request: PlanRequest) -> PlanResult:
             print(f"    Cluster {cluster_id}: {len(cluster_sites)} sites")
         
         # Use sequential planning
-        result = plan_clusters_sequentially(request, cluster_data)
-        return result.to_plan_result()
+        calendar_result = plan_clusters_sequentially(request, cluster_data)
+        
+        # Apply team ID renumbering and generate cluster-based team labels (C#-T#)
+        _renumber_team_ids(calendar_result.team_days, is_calendar_mode=False)
+        
+        return calendar_result.to_plan_result()
 
 
 def _plan_clusters_independently_calendar(

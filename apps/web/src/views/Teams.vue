@@ -27,13 +27,24 @@
         </div>
       </div>
       
-      <button 
-        @click="openAddTeamModal" 
-        class="btn btn-primary"
-        :disabled="!selectedState"
-      >
-        + Add Team
-      </button>
+      <div class="button-group">
+        <button 
+          @click="openAddTeamModal" 
+          class="btn btn-primary"
+          :disabled="!selectedState"
+        >
+          + Add Team
+        </button>
+        
+        <button 
+          @click="generateAllSchedules" 
+          class="btn btn-success"
+          :disabled="!selectedState || teams.length === 0 || generatingSchedules"
+          title="Generate PDF schedules for all teams"
+        >
+          {{ generatingSchedules ? '⏳ Generating...' : '📄 Generate All Schedules' }}
+        </button>
+      </div>
     </div>
     
     <!-- Loading State -->
@@ -85,6 +96,9 @@
                 <span v-else>-</span>
               </td>
               <td class="actions">
+                <button @click="generateTeamSchedule(team.team_id)" class="btn-icon" title="Generate Schedule PDF">
+                  📄
+                </button>
                 <button @click="editTeam(team)" class="btn-icon" title="Edit">
                   ✏️
                 </button>
@@ -294,6 +308,7 @@ const planningTeamIdsMessage = ref('')
 const loading = ref(false)
 const loadingStates = ref(false)
 const loadingPlanningTeamIds = ref(false)
+const generatingSchedules = ref(false)
 const error = ref('')
 
 // Modal state
@@ -512,6 +527,65 @@ function closeModal() {
   }
 }
 
+async function generateTeamSchedule(teamId) {
+  if (!store.workspace || !selectedState.value) return
+  
+  error.value = ''
+  
+  try {
+    const response = await teamAPI.generateSchedule(store.workspace, selectedState.value, teamId)
+    
+    // Create a blob from the response
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `schedule_${teamId}_${new Date().toISOString().split('T')[0]}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    
+    // Cleanup
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Failed to generate schedule:', err)
+    error.value = err.response?.data?.detail || 'Failed to generate schedule. Make sure planning results exist for this team.'
+  }
+}
+
+async function generateAllSchedules() {
+  if (!store.workspace || !selectedState.value || teams.value.length === 0) return
+  
+  generatingSchedules.value = true
+  error.value = ''
+  
+  try {
+    const response = await teamAPI.generateAllSchedules(store.workspace, selectedState.value)
+    
+    // Create a blob from the response
+    const blob = new Blob([response.data], { type: 'application/zip' })
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `team_schedules_${selectedState.value}_${new Date().toISOString().split('T')[0]}.zip`
+    document.body.appendChild(link)
+    link.click()
+    
+    // Cleanup
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Failed to generate schedules:', err)
+    error.value = err.response?.data?.detail || 'Failed to generate schedules. Make sure planning results exist and teams have assigned routes.'
+  } finally {
+    generatingSchedules.value = false
+  }
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '-'
   try {
@@ -620,6 +694,26 @@ h2 {
 }
 
 .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.btn-success {
+  background-color: #059669;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #047857;
+}
+
+.btn-success:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

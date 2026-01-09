@@ -140,7 +140,7 @@
               <th>City</th>
               <th>Status</th>
               <th>Crew Assigned</th>
-              <th>Completed Date</th>
+              <th>Scheduled Date</th>
               <th>Notes</th>
               <th>Last Updated</th>
               <th class="sticky-right">Actions</th>
@@ -186,7 +186,7 @@
                   placeholder="Crew name"
                 />
               </td>
-              <td class="date">{{ formatDate(site.completed_date) }}</td>
+              <td class="date">{{ formatDate(site.scheduled_date) }}</td>
               <td class="notes">
                 <span v-if="editingSite !== site.site_id" :title="site.notes">{{ site.notes || '-' }}</span>
                 <input 
@@ -462,7 +462,6 @@ async function applyBulkAction() {
       updateData.crew_assigned = bulkCrew.value
     } else if (bulkAction.value === 'complete') {
       updateData.status = 'completed'
-      updateData.completed_date = new Date().toISOString().split('T')[0]
     }
     
     const response = await progressAPI.bulkUpdate(store.workspace, updateData)
