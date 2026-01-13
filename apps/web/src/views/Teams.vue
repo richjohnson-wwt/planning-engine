@@ -552,8 +552,24 @@ async function generateTeamSchedule(teamId) {
   try {
     const response = await teamAPI.generateSchedule(store.workspace, selectedState.value, teamId)
     
+    console.log('Schedule response received:', response)
+    console.log('Response data type:', typeof response.data)
+    console.log('Response data:', response.data)
+    
+    // Verify we have valid data
+    if (!response.data) {
+      throw new Error('No data received from server')
+    }
+    
     // Create a blob from the response
     const blob = new Blob([response.data], { type: 'application/pdf' })
+    
+    console.log('Blob created:', blob.size, 'bytes')
+    
+    // Verify blob has content
+    if (blob.size === 0) {
+      throw new Error('Received empty PDF file')
+    }
     
     // Create download link
     const url = window.URL.createObjectURL(blob)
@@ -566,9 +582,12 @@ async function generateTeamSchedule(teamId) {
     // Cleanup
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
+    
+    console.log('Schedule downloaded successfully')
   } catch (err) {
     console.error('Failed to generate schedule:', err)
-    error.value = err.response?.data?.detail || 'Failed to generate schedule. Make sure planning results exist for this team.'
+    console.error('Error details:', err.message, err.response)
+    error.value = err.response?.data?.detail || err.message || 'Failed to generate schedule. Make sure planning results exist for this team.'
   }
 }
 

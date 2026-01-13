@@ -138,21 +138,27 @@ def generate_team_schedule_pdf(
     metadata = plan_data.get('metadata', {})
     team_days = result.get('team_days', [])
     
-    # Filter team days for this specific team
-    # Try matching by team_label first (e.g., "C1-T1", "T1")
-    # If no match, try matching by numeric team_id (for compatibility)
-    team_routes = [td for td in team_days if td.get('team_label') == team_id]
+    # Handle comma-separated team IDs (e.g., "C2-T1,C2-T2,C2-T3")
+    # Split by comma and collect routes for all individual team IDs
+    team_id_list = [tid.strip() for tid in team_id.split(',')]
+    
+    team_routes = []
+    for tid in team_id_list:
+        # Try matching by team_label first (e.g., "C1-T1", "T1")
+        matching_routes = [td for td in team_days if td.get('team_label') == tid]
+        
+        if not matching_routes:
+            # Try matching by numeric team_id (for compatibility)
+            try:
+                numeric_team_id = int(tid)
+                matching_routes = [td for td in team_days if td.get('team_id') == numeric_team_id]
+            except (ValueError, TypeError):
+                pass
+        
+        team_routes.extend(matching_routes)
     
     if not team_routes:
-        # Try matching by numeric team_id
-        try:
-            numeric_team_id = int(team_id)
-            team_routes = [td for td in team_days if td.get('team_id') == numeric_team_id]
-        except (ValueError, TypeError):
-            pass
-    
-    if not team_routes:
-        print(f"No routes found for team {team_id}")
+        print(f"No routes found for team ID(s): {team_id}")
         return False
     
     # Create PDF

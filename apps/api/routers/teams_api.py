@@ -218,7 +218,9 @@ async def generate_team_schedule(
         # Create temporary file for PDF
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         temp_dir = Path(tempfile.gettempdir())
-        pdf_filename = f"schedule_{team_id}_{timestamp}.pdf"
+        # Sanitize team_id for filename (replace commas with underscores to avoid HTTP header issues)
+        safe_team_id = team_id.replace(',', '_')
+        pdf_filename = f"schedule_{safe_team_id}_{timestamp}.pdf"
         pdf_path = temp_dir / pdf_filename
         
         # Generate PDF
