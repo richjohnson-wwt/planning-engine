@@ -370,19 +370,39 @@ function formatTimestamp(timestamp) {
 function formatCrewAssignment(crewAssigned) {
   if (!crewAssigned) return '-'
   
-  // Try to find matching team in teamsData
-  // First try exact match
-  let team = teamsData.value.find(t => t.team_id === crewAssigned)
+  // Helper function to check if any ID in crewAssigned matches any ID in team.team_id
+  const findMatchingTeam = (crewId) => {
+    return teamsData.value.find(t => {
+      if (!t.team_id) return false
+      
+      // Split both crew_assigned and team.team_id in case they contain multiple IDs
+      const crewIds = crewId.split(',').map(id => id.trim())
+      const teamIds = t.team_id.split(',').map(id => id.trim())
+      
+      // Check if any crew ID matches any team ID
+      return crewIds.some(cId => teamIds.includes(cId))
+    })
+  }
   
-  // If no exact match, try extracting number from crew_assigned (e.g., 'Team-1' -> '1')
-  if (!team && crewAssigned.includes('-')) {
+  // Try to find matching team
+  let team = findMatchingTeam(crewAssigned)
+  
+  // If no match with comma-separated logic, try extracting number from crew_assigned (e.g., 'Team-1' -> '1')
+  if (!team && crewAssigned.includes('-') && !crewAssigned.includes(',')) {
     const extractedId = crewAssigned.split('-').pop()
-    team = teamsData.value.find(t => t.team_id === extractedId || t.team_id === parseInt(extractedId))
+    team = teamsData.value.find(t => {
+      const teamIds = t.team_id.split(',').map(id => id.trim())
+      return teamIds.includes(extractedId) || teamIds.includes(parseInt(extractedId).toString())
+    })
   }
   
   // If still no match, try treating crew_assigned as a number
   if (!team && !isNaN(crewAssigned)) {
-    team = teamsData.value.find(t => t.team_id === parseInt(crewAssigned) || t.team_id === crewAssigned.toString())
+    const numId = parseInt(crewAssigned).toString()
+    team = teamsData.value.find(t => {
+      const teamIds = t.team_id.split(',').map(id => id.trim())
+      return teamIds.includes(numId) || teamIds.includes(crewAssigned)
+    })
   }
   
   if (team && team.team_name) {

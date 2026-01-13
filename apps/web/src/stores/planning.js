@@ -72,11 +72,21 @@ export const usePlanningStore = defineStore('planning', () => {
 
   // Actions
   function setWorkspace(name) {
+    // Clear plan result when workspace changes to prevent showing stale data
+    if (workspace.value !== name) {
+      console.log('Workspace changing, clearing plan result:', workspace.value, '->', name)
+      planResult.value = null
+    }
     workspace.value = name
     planRequest.value.workspace = name
   }
 
   function setStateAbbr(abbr) {
+    // Clear plan result when state changes to prevent showing stale data
+    if (stateAbbr.value !== abbr) {
+      console.log('State changing, clearing plan result:', stateAbbr.value, '->', abbr)
+      planResult.value = null
+    }
     stateAbbr.value = abbr
     planRequest.value.state_abbr = abbr
   }

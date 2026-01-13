@@ -122,16 +122,16 @@
         
         <div class="modal-body">
           <div class="form-group">
-            <label for="team-id">Team ID *</label>
+            <label for="team-id">Team ID(s) *</label>
             <select 
               v-if="!editingTeam"
               id="team-id"
-              v-model="formData.team_id" 
-              class="form-input"
-              required
+              v-model="selectedTeamIds" 
+              class="form-input multi-select"
+              multiple
+              size="5"
               :disabled="loadingPlanningTeamIds"
             >
-              <option value="">{{ planningTeamIdsMessage || 'Select Team ID from planning...' }}</option>
               <option v-for="teamId in planningTeamIds" :key="teamId" :value="teamId">
                 {{ teamId }}
               </option>
@@ -146,6 +146,9 @@
             />
             <small v-if="!editingTeam && planningTeamIds.length === 0" class="help-text">
               {{ planningTeamIdsMessage || 'Run a plan first to see available Team IDs' }}
+            </small>
+            <small v-if="!editingTeam && planningTeamIds.length > 0" class="help-text">
+              Hold Ctrl (Cmd on Mac) to select multiple Team IDs. Selected: {{ selectedTeamIds.length }}
             </small>
           </div>
           
@@ -292,7 +295,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { usePlanningStore } from '../stores/planning'
 import { teamAPI, workspaceAPI } from '../services/api'
 
@@ -305,6 +308,7 @@ const availableStates = ref([])
 const availableCities = ref([])
 const planningTeamIds = ref([])
 const planningTeamIdsMessage = ref('')
+const selectedTeamIds = ref([])
 const loading = ref(false)
 const loadingStates = ref(false)
 const loadingPlanningTeamIds = ref(false)
@@ -328,6 +332,11 @@ const formData = ref({
   availability_start: '',
   availability_end: '',
   notes: ''
+})
+
+// Watch selectedTeamIds and update formData.team_id
+watch(selectedTeamIds, (newIds) => {
+  formData.value.team_id = newIds.join(',')
 })
 
 // Computed
@@ -429,6 +438,7 @@ async function generateTeamId() {
 async function openAddTeamModal() {
   // Load planning team IDs when opening the modal
   await loadPlanningTeamIds()
+  selectedTeamIds.value = []
   showAddTeamModal.value = true
 }
 
@@ -439,6 +449,13 @@ function editTeam(team) {
   // Convert null to empty string for cluster_id
   if (formData.value.cluster_id === null || formData.value.cluster_id === undefined) {
     formData.value.cluster_id = ''
+  }
+  
+  // Split comma-separated team_id into array for display
+  if (team.team_id && team.team_id.includes(',')) {
+    selectedTeamIds.value = team.team_id.split(',').map(id => id.trim())
+  } else {
+    selectedTeamIds.value = team.team_id ? [team.team_id] : []
   }
 }
 
@@ -937,6 +954,25 @@ h2 {
 textarea.form-input {
   resize: vertical;
   font-family: inherit;
+}
+
+.form-input.multi-select {
+  min-height: 120px;
+  padding: 0.5rem;
+}
+
+.form-input.multi-select option {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.form-input.multi-select option:hover {
+  background-color: #e5e7eb;
+}
+
+.form-input.multi-select option:checked {
+  background-color: #1e3a8a;
+  color: white;
 }
 
 .modal-footer {

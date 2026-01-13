@@ -71,7 +71,7 @@ export const authAPI = {
 // Workspace API
 export const workspaceAPI = {
   create(workspaceName) {
-    return api.post('/workspace', { workspace_name: workspaceName })
+    return api.post('/workspaces', { workspace_name: workspaceName })
   },
   
   list() {
@@ -86,7 +86,7 @@ export const workspaceAPI = {
 // Excel parsing API
 export const excelAPI = {
   parse(workspaceName, filePath, sheetName, columnMapping) {
-    return api.post('/parse-excel', {
+    return api.post('/workspaces/parse-excel', {
       workspace_name: workspaceName,
       file_path: filePath,
       sheet_name: sheetName,
@@ -100,7 +100,7 @@ export const excelAPI = {
     formData.append('sheet_name', sheetName)
     formData.append('column_mapping', JSON.stringify(columnMapping))
     
-    return api.post('/parse-excel-upload', formData, {
+    return api.post('/workspaces/parse-excel-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

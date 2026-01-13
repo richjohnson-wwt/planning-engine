@@ -52,9 +52,19 @@ def parse_excel_to_csv(
         # Check if all mapped columns exist in the Excel file
         missing_columns = set(excel_columns) - set(df.columns)
         if missing_columns:
+            # Get the filename from the path
+            filename = Path(file_path).name
+            
+            # Build detailed error message showing which field mappings failed
+            error_details = []
+            for standard_field, excel_column in column_mapping.items():
+                if excel_column in missing_columns:
+                    error_details.append(f"'{standard_field}' → '{excel_column}'")
+            
             raise ValueError(
-                f"Columns not found in Excel file: {', '.join(missing_columns)}. "
-                f"Available columns: {', '.join(df.columns)}"
+                f"Column mapping error in {filename}: "
+                f"{', '.join(error_details)} not found. "
+                f"Available columns in file: {', '.join(sorted(df.columns))}"
             )
         
         # Select only the mapped columns

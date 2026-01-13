@@ -430,6 +430,13 @@ function exportJSON() {
   URL.revokeObjectURL(url)
 }
 
+function clearRoutesState() {
+  console.log('Clearing Routes tab state')
+  outputFiles.value = []
+  store.setPlanResult(null)
+  store.updatePlanRequest(null)
+}
+
 async function fetchOutputFiles() {
   const workspace = workspaceFromResult.value
   const state = stateFromResult.value
@@ -544,17 +551,47 @@ function formatTimestamp(timestamp) {
   return date.toLocaleString()
 }
 
+// Track last loaded workspace/state to detect changes
+const lastLoadedWorkspace = ref(null)
+const lastLoadedState = ref(null)
+
 // On mount, auto-select first state if needed, then load results
 onMounted(async () => {
-  console.log('Results page mounted')
-  console.log('Store workspace:', store.workspace)
-  console.log('Store stateAbbr:', store.stateAbbr)
+  console.log('=== ROUTES TAB MOUNTED ===')
+  console.log('Current store.workspace:', store.workspace)
+  console.log('Current store.stateAbbr:', store.stateAbbr)
+  console.log('Last loaded workspace:', lastLoadedWorkspace.value)
+  console.log('Last loaded state:', lastLoadedState.value)
+  
+  // Check if workspace or state has changed since last visit
+  const workspaceChanged = lastLoadedWorkspace.value && lastLoadedWorkspace.value !== store.workspace
+  const stateChanged = lastLoadedState.value && lastLoadedState.value !== store.stateAbbr
+  
+  // Also check if we have plan data but it's for a different workspace/state
+  const hasPlanData = store.planResult || store.planRequest?.workspace
+  const planWorkspaceMismatch = hasPlanData && store.planRequest?.workspace && store.planRequest.workspace !== store.workspace
+  const planStateMismatch = hasPlanData && store.planRequest?.state_abbr && store.planRequest.state_abbr !== store.stateAbbr
+  
+  console.log('Workspace changed?', workspaceChanged, `(${lastLoadedWorkspace.value} -> ${store.workspace})`)
+  console.log('State changed?', stateChanged, `(${lastLoadedState.value} -> ${store.stateAbbr})`)
+  console.log('Plan workspace mismatch?', planWorkspaceMismatch, `(plan: ${store.planRequest?.workspace}, current: ${store.workspace})`)
+  console.log('Plan state mismatch?', planStateMismatch, `(plan: ${store.planRequest?.state_abbr}, current: ${store.stateAbbr})`)
+  
+  if (workspaceChanged || stateChanged || planWorkspaceMismatch || planStateMismatch) {
+    console.log('🧹 CLEARING STALE DATA - workspace/state changed or plan data mismatch')
+    clearRoutesState()
+  } else {
+    console.log('No workspace/state change detected, keeping existing data')
+  }
   
   // If we already have both workspace and state (from localStorage), load results immediately
   if (store.workspace && store.stateAbbr) {
     console.log('Loading results for existing workspace/state')
     await loadLatestResult()
     await fetchOutputFiles()
+    // Update tracking
+    lastLoadedWorkspace.value = store.workspace
+    lastLoadedState.value = store.stateAbbr
   } else {
     // Otherwise, try to auto-select first state
     console.log('Auto-selecting first state')
@@ -563,6 +600,9 @@ onMounted(async () => {
     if (store.workspace && store.stateAbbr) {
       await loadLatestResult()
       await fetchOutputFiles()
+      // Update tracking
+      lastLoadedWorkspace.value = store.workspace
+      lastLoadedState.value = store.stateAbbr
     }
   }
 })
@@ -570,11 +610,20 @@ onMounted(async () => {
 // Watch for workspace changes - auto-select first state and load results
 watch(() => store.workspace, async (newWorkspace, oldWorkspace) => {
   console.log('Workspace changed:', oldWorkspace, '->', newWorkspace)
+  
+  // Clear state when workspace changes to avoid showing stale data
+  if (oldWorkspace && newWorkspace !== oldWorkspace) {
+    clearRoutesState()
+  }
+  
   if (newWorkspace) {
     await autoSelectFirstState()
     if (store.stateAbbr) {
       await loadLatestResult()
       await fetchOutputFiles()
+      // Update tracking
+      lastLoadedWorkspace.value = newWorkspace
+      lastLoadedState.value = store.stateAbbr
     }
   }
 })
@@ -582,9 +631,18 @@ watch(() => store.workspace, async (newWorkspace, oldWorkspace) => {
 // Watch for state changes - load results for the new state
 watch(() => store.stateAbbr, async (newState, oldState) => {
   console.log('State changed:', oldState, '->', newState)
+  
+  // Clear state when state changes to avoid showing stale data
+  if (oldState && newState !== oldState) {
+    clearRoutesState()
+  }
+  
   if (newState && store.workspace) {
     await loadLatestResult()
     await fetchOutputFiles()
+    // Update tracking
+    lastLoadedWorkspace.value = store.workspace
+    lastLoadedState.value = newState
   }
 })
 
