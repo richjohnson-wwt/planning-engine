@@ -285,18 +285,21 @@ const actualCrewsUsed = computed(() => {
 
 // Check if this is a Fixed Calendar plan (has end_date in request or result metadata)
 const isFixedCalendar = computed(() => {
-  // Check planRequest first (for just-generated plans)
-  if (store.planRequest?.end_date) return true
+  // Fixed Calendar mode is when BOTH start_date AND end_date are specified in the REQUEST
+  // Fixed Crew mode is when only start_date is specified (or neither), and end_date is null
+  // 
+  // IMPORTANT: We check planRequest.end_date (from metadata), NOT planResult.end_date
+  // The planResult.end_date is the CALCULATED end date from the algorithm and is always populated
+  // The planRequest.end_date is the USER-SPECIFIED end date and is only set for Fixed Calendar mode
   
-  // Check result metadata (for loaded/old plans)
-  // The result from backend has structure: { metadata: {...}, result: { team_days: [...] } }
-  // But store.planResult only stores the result.team_days part
-  // So we need to check if any team_day has a date field (indicates multi-day/calendar planning)
-  if (store.planResult?.team_days && store.planResult.team_days.length > 0) {
-    // If team_days have dates, it's likely a calendar plan
-    return store.planResult.team_days.some(td => td.date !== null && td.date !== undefined)
+  // Check planRequest.end_date (which comes from metadata)
+  // This is the only reliable way to determine the planning mode
+  // Use truthy check - end_date must have a value (not null, undefined, or empty string)
+  if (store.planRequest?.end_date) {
+    return true
   }
   
+  // If end_date is null, undefined, or empty string in the request, it's Fixed Crew mode
   return false
 })
 
@@ -316,8 +319,8 @@ const displayTeamCount = computed(() => {
   if (isFixedCalendar.value) {
     return actualCrewsUsed.value
   }
-  // For Fixed Crew mode, show input team count
-  return store.planRequest?.team_config?.teams || 0
+  // For Fixed Crew mode, show input team count from metadata
+  return store.planRequest?.team_config?.teams || store.planRequest?.teams || 0
 })
 
 // Get workspace and state from planRequest (which is populated when planning)
@@ -498,6 +501,15 @@ async function loadLatestResult() {
           workspace: response.data.metadata.workspace,
           state_abbr: response.data.metadata.state_abbr,
           use_clusters: response.data.metadata.use_clusters,
+          start_date: response.data.metadata.start_date,
+          end_date: response.data.metadata.end_date,
+          team_config: {
+            teams: response.data.metadata.teams || 1,
+            workday: {
+              start: '08:00',
+              end: '17:00'
+            }
+          },
           max_route_minutes: response.data.metadata.max_route_minutes,
           service_minutes_per_site: response.data.metadata.service_minutes_per_site
         })
