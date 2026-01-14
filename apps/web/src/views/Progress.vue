@@ -464,7 +464,17 @@ const canApplyBulkAction = computed(() => {
 
 // Bulk action methods
 async function applyBulkAction() {
-  if (!canApplyBulkAction.value || selectedSites.value.length === 0) return
+  console.log('applyBulkAction called')
+  console.log('canApplyBulkAction:', canApplyBulkAction.value)
+  console.log('selectedSites:', selectedSites.value)
+  console.log('bulkAction:', bulkAction.value)
+  console.log('bulkStatus:', bulkStatus.value)
+  console.log('bulkCrew:', bulkCrew.value)
+  
+  if (!canApplyBulkAction.value || selectedSites.value.length === 0) {
+    console.log('Early return - conditions not met')
+    return
+  }
   
   loading.value = true
   error.value = ''
@@ -482,7 +492,9 @@ async function applyBulkAction() {
       updateData.status = 'completed'
     }
     
+    console.log('Sending bulk update with data:', updateData)
     const response = await progressAPI.bulkUpdate(store.workspace, updateData)
+    console.log('Bulk update response:', response.data)
     
     if (response.data.success) {
       console.log('Bulk update successful:', response.data.message)
@@ -491,10 +503,12 @@ async function applyBulkAction() {
       clearSelection()
     } else {
       error.value = response.data.error || 'Failed to apply bulk action'
+      console.error('Bulk update failed:', error.value)
     }
   } catch (err) {
     console.error('Failed to apply bulk action:', err)
-    error.value = 'Failed to apply bulk action'
+    console.error('Error details:', err.response?.data)
+    error.value = `Failed to apply bulk action: ${err.response?.data?.detail || err.message}`
   } finally {
     loading.value = false
   }

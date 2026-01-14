@@ -73,41 +73,6 @@ def initialize_progress(workspace_name: str, force_refresh: bool = False, curren
         }
 
 
-@router.put("/{workspace_name}/progress/{site_id}")
-def update_progress(workspace_name: str, site_id: str, update_data: dict, current_user: UserInDB = Depends(set_user_context)):
-    """
-    Update progress for a single site.
-    
-    Accepts partial updates - only provided fields will be updated.
-    """
-    try:
-        # Extract update fields
-        status = update_data.get('status')
-        scheduled_date = update_data.get('scheduled_date')
-        crew_assigned = update_data.get('crew_assigned')
-        notes = update_data.get('notes')
-        
-        # Convert scheduled_date string to date if provided
-        if scheduled_date:
-            scheduled_date = datetime.fromisoformat(scheduled_date).date()
-        
-        updated_site = update_site_progress(
-            workspace_name,
-            site_id,
-            status=status,
-            scheduled_date=scheduled_date,
-            crew_assigned=crew_assigned,
-            notes=notes
-        )
-        
-        return {"success": True, "site": updated_site}
-    
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        return {"success": False, "error": f"Failed to update progress: {str(e)}"}
-
-
 @router.put("/{workspace_name}/progress/bulk")
 def bulk_update_progress_endpoint(workspace_name: str, update_data: dict, current_user: UserInDB = Depends(set_user_context)):
     """
@@ -148,3 +113,38 @@ def bulk_update_progress_endpoint(workspace_name: str, update_data: dict, curren
     
     except Exception as e:
         return {"success": False, "error": f"Failed to bulk update: {str(e)}"}
+
+
+@router.put("/{workspace_name}/progress/{site_id}")
+def update_progress(workspace_name: str, site_id: str, update_data: dict, current_user: UserInDB = Depends(set_user_context)):
+    """
+    Update progress for a single site.
+    
+    Accepts partial updates - only provided fields will be updated.
+    """
+    try:
+        # Extract update fields
+        status = update_data.get('status')
+        scheduled_date = update_data.get('scheduled_date')
+        crew_assigned = update_data.get('crew_assigned')
+        notes = update_data.get('notes')
+        
+        # Convert scheduled_date string to date if provided
+        if scheduled_date:
+            scheduled_date = datetime.fromisoformat(scheduled_date).date()
+        
+        updated_site = update_site_progress(
+            workspace_name,
+            site_id,
+            status=status,
+            scheduled_date=scheduled_date,
+            crew_assigned=crew_assigned,
+            notes=notes
+        )
+        
+        return {"success": True, "site": updated_site}
+    
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to update progress: {str(e)}"}
