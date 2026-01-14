@@ -80,7 +80,11 @@ def load_team_info(workspace_name: str, state_abbr: str, team_id: str) -> Option
     
     try:
         df = pd.read_csv(teams_file)
-        team_row = df[df['team_id'] == team_id]
+        
+        # Convert team_id column to string for comparison
+        df['team_id'] = df['team_id'].astype(str)
+        
+        team_row = df[df['team_id'] == str(team_id)]
         
         if team_row.empty:
             return None
@@ -94,8 +98,14 @@ def load_team_info(workspace_name: str, state_abbr: str, team_id: str) -> Option
                 # notes field requires a string, not None
                 if key == 'notes':
                     team_data[key] = ''
+                # assigned_clusters can be None
+                elif key == 'assigned_clusters':
+                    team_data[key] = None
                 else:
                     team_data[key] = None
+        
+        # Ensure team_id is string
+        team_data['team_id'] = str(team_data['team_id'])
         
         return Team(**team_data)
     except Exception as e:
@@ -139,27 +149,22 @@ def _prepare_team_schedule_data(workspace_name: str, state_abbr: str, team_id: s
     metadata = plan_data.get('metadata', {})
     team_days = result.get('team_days', [])
     
-    # Handle comma-separated team IDs (e.g., "C2-T1,C2-T2,C2-T3")
-    # Split by comma and collect routes for all individual team IDs
-    team_id_list = [tid.strip() for tid in team_id.split(',')]
+    # Get assigned clusters from team info
+    # assigned_clusters contains comma-separated cluster-team IDs (e.g., "C1-T1,C1-T2,C1-T3")
+    if not team_info.assigned_clusters:
+        print(f"Team {team_id} has no assigned clusters")
+        return None
+    
+    cluster_list = [cid.strip() for cid in team_info.assigned_clusters.split(',')]
     
     team_routes = []
-    for tid in team_id_list:
-        # Try matching by team_label first (e.g., "C1-T1", "T1")
-        matching_routes = [td for td in team_days if td.get('team_label') == tid]
-        
-        if not matching_routes:
-            # Try matching by numeric team_id (for compatibility)
-            try:
-                numeric_team_id = int(tid)
-                matching_routes = [td for td in team_days if td.get('team_id') == numeric_team_id]
-            except (ValueError, TypeError):
-                pass
-        
+    for cluster_id in cluster_list:
+        # Match routes by team_label (e.g., "C1-T1", "C1-T2")
+        matching_routes = [td for td in team_days if td.get('team_label') == cluster_id]
         team_routes.extend(matching_routes)
     
     if not team_routes:
-        print(f"No routes found for team ID(s): {team_id}")
+        print(f"No routes found for team {team_id} with assigned clusters: {team_info.assigned_clusters}")
         return None
     
     return {
@@ -246,9 +251,6 @@ def generate_team_schedule_pdf(
         ['Phone:', team_info.contact_phone or 'N/A'],
         ['Email:', team_info.contact_email or 'N/A'],
     ]
-    
-    if team_info.cluster_id is not None:
-        team_info_data.append(['Cluster:', f'Cluster {team_info.cluster_id}'])
     
     team_info_table = Table(team_info_data, colWidths=[1.5*inch, 4.5*inch])
     team_info_table.setStyle(TableStyle([
@@ -465,8 +467,6 @@ def generate_team_schedule_text(
             f.write(f"Contact:        {team_info.contact_name or 'N/A'}\n")
             f.write(f"Phone:          {team_info.contact_phone or 'N/A'}\n")
             f.write(f"Email:          {team_info.contact_email or 'N/A'}\n")
-            if team_info.cluster_id is not None:
-                f.write(f"Cluster:        Cluster {team_info.cluster_id}\n")
             f.write("\n")
             
             # Planning Details Section

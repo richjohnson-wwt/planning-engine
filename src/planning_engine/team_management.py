@@ -76,11 +76,11 @@ def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
                 else:
                     team_data[date_field] = None
             
-            # Handle cluster_id (can be null)
-            if 'cluster_id' in team_data and pd.notna(team_data['cluster_id']):
-                team_data['cluster_id'] = int(team_data['cluster_id'])
+            # Handle assigned_clusters (can be null)
+            if 'assigned_clusters' in team_data and pd.notna(team_data['assigned_clusters']):
+                team_data['assigned_clusters'] = str(team_data['assigned_clusters'])
             else:
-                team_data['cluster_id'] = None
+                team_data['assigned_clusters'] = None
             
             # Handle optional string fields
             for field in ['contact_name', 'contact_phone', 'contact_email', 'notes']:
@@ -217,33 +217,31 @@ def delete_team(workspace_name: str, state_abbr: str, team_id: str) -> bool:
 def generate_team_id(workspace_name: str, state_abbr: str) -> str:
     """Generate a unique team ID for a state.
     
-    Format: TEAM-{STATE}-{NUMBER}
-    Example: TEAM-LA-001, TEAM-LA-002, etc.
+    Format: Simple sequential number (1, 2, 3, etc.)
     
     Args:
         workspace_name: Name of the workspace
         state_abbr: State abbreviation
         
     Returns:
-        Generated team ID
+        Generated team ID as a string
     """
     teams = load_teams(workspace_name, state_abbr)
     
-    # Find the highest number used
+    # Find the highest numeric ID used
     max_num = 0
-    prefix = f"TEAM-{state_abbr}-"
     
     for team in teams:
-        if team.team_id.startswith(prefix):
-            try:
-                num = int(team.team_id.replace(prefix, ""))
-                max_num = max(max_num, num)
-            except ValueError:
-                continue
+        try:
+            num = int(team.team_id)
+            max_num = max(max_num, num)
+        except ValueError:
+            # Skip non-numeric IDs
+            continue
     
     # Generate next ID
     next_num = max_num + 1
-    return f"{prefix}{next_num:03d}"
+    return str(next_num)
 
 
 def get_available_cities(workspace_name: str, state_abbr: str) -> List[str]:

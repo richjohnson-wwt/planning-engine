@@ -182,11 +182,15 @@ class Team(BaseModel):
     
     Teams are stored in state-specific teams.csv files.
     Used for assigning crews to routes and tracking progress.
+    
+    Structure:
+    - team_id: Simple sequential ID (e.g., "1", "2", "3")
+    - assigned_clusters: Comma-separated cluster-team IDs (e.g., "C1-T1,C1-T2,C1-T3")
     """
     team_id: str
     team_name: str
     city: str
-    cluster_id: Optional[int] = None  # Optional cluster assignment
+    assigned_clusters: Optional[str] = None  # Comma-separated cluster-team assignments (e.g., "C1-T1,C1-T2")
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
@@ -206,10 +210,10 @@ class Team(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "team_id": "TEAM-LA-001",
+                    "team_id": "1",
                     "team_name": "Team Alpha",
                     "city": "New Orleans",
-                    "cluster_id": 0,
+                    "assigned_clusters": "C1-T1,C1-T2",
                     "contact_name": "John Smith",
                     "contact_phone": "555-0101",
                     "contact_email": "john@example.com",

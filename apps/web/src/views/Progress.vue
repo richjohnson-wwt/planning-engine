@@ -370,39 +370,37 @@ function formatTimestamp(timestamp) {
 function formatCrewAssignment(crewAssigned) {
   if (!crewAssigned) return '-'
   
-  // Helper function to check if any ID in crewAssigned matches any ID in team.team_id
+  // Helper function to check if any ID in crewAssigned matches any ID in team.assigned_clusters
   const findMatchingTeam = (crewId) => {
     return teamsData.value.find(t => {
-      if (!t.team_id) return false
+      if (!t.assigned_clusters) return false
       
-      // Split both crew_assigned and team.team_id in case they contain multiple IDs
+      // Split both crew_assigned and team.assigned_clusters in case they contain multiple IDs
       const crewIds = crewId.split(',').map(id => id.trim())
-      const teamIds = t.team_id.split(',').map(id => id.trim())
+      const assignedClusters = t.assigned_clusters.split(',').map(id => id.trim())
       
-      // Check if any crew ID matches any team ID
-      return crewIds.some(cId => teamIds.includes(cId))
+      // Check if any crew ID matches any assigned cluster
+      return crewIds.some(cId => assignedClusters.includes(cId))
     })
   }
   
   // Try to find matching team
   let team = findMatchingTeam(crewAssigned)
   
-  // If no match with comma-separated logic, try extracting number from crew_assigned (e.g., 'Team-1' -> '1')
+  // If no match, try direct match with assigned_clusters (e.g., 'C1-T1' or 'Team-1')
   if (!team && crewAssigned.includes('-') && !crewAssigned.includes(',')) {
-    const extractedId = crewAssigned.split('-').pop()
     team = teamsData.value.find(t => {
-      const teamIds = t.team_id.split(',').map(id => id.trim())
-      return teamIds.includes(extractedId) || teamIds.includes(parseInt(extractedId).toString())
+      if (!t.assigned_clusters) return false
+      const assignedClusters = t.assigned_clusters.split(',').map(id => id.trim())
+      return assignedClusters.includes(crewAssigned)
     })
   }
   
-  // If still no match, try treating crew_assigned as a number
-  if (!team && !isNaN(crewAssigned)) {
-    const numId = parseInt(crewAssigned).toString()
-    team = teamsData.value.find(t => {
-      const teamIds = t.team_id.split(',').map(id => id.trim())
-      return teamIds.includes(numId) || teamIds.includes(crewAssigned)
-    })
+  // If still no match, try matching non-clustered team labels (e.g., "Team-1" -> team_id "1")
+  // This handles fixed crew size planning without clusters
+  if (!team && crewAssigned.match(/^Team-(\d+)$/i)) {
+    const numericId = crewAssigned.match(/^Team-(\d+)$/i)[1]
+    team = teamsData.value.find(t => t.team_id === numericId)
   }
   
   if (team && team.team_name) {

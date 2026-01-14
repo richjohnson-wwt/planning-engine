@@ -72,7 +72,7 @@
               <th>Team ID</th>
               <th>Team Name</th>
               <th>City</th>
-              <th>Cluster</th>
+              <th>Assigned Clusters</th>
               <th>Contact</th>
               <th>Phone</th>
               <th>Availability</th>
@@ -84,8 +84,8 @@
               <td class="team-id">{{ team.team_id }}</td>
               <td class="team-name">{{ team.team_name }}</td>
               <td>{{ team.city }}</td>
-              <td class="cluster-id">
-                {{ team.cluster_id !== null && team.cluster_id !== undefined ? `Cluster ${team.cluster_id}` : '-' }}
+              <td class="assigned-clusters">
+                {{ team.assigned_clusters || '-' }}
               </td>
               <td>{{ team.contact_name || '-' }}</td>
               <td>{{ team.contact_phone || '-' }}</td>
@@ -122,37 +122,6 @@
         
         <div class="modal-body">
           <div class="form-group">
-            <label for="team-id">Team ID(s) *</label>
-            <select 
-              v-if="!editingTeam"
-              id="team-id"
-              v-model="selectedTeamIds" 
-              class="form-input multi-select"
-              multiple
-              size="5"
-              :disabled="loadingPlanningTeamIds"
-            >
-              <option v-for="teamId in planningTeamIds" :key="teamId" :value="teamId">
-                {{ teamId }}
-              </option>
-            </select>
-            <input 
-              v-else
-              id="team-id"
-              v-model="formData.team_id" 
-              type="text" 
-              class="form-input"
-              readonly
-            />
-            <small v-if="!editingTeam && planningTeamIds.length === 0" class="help-text">
-              {{ planningTeamIdsMessage || 'Run a plan first to see available Team IDs' }}
-            </small>
-            <small v-if="!editingTeam && planningTeamIds.length > 0" class="help-text">
-              Hold Ctrl (Cmd on Mac) to select multiple Team IDs. Selected: {{ selectedTeamIds.length }}
-            </small>
-          </div>
-          
-          <div class="form-group">
             <label for="team-name">Team Name *</label>
             <input 
               id="team-name"
@@ -180,15 +149,25 @@
           </div>
           
           <div class="form-group">
-            <label for="cluster-id">Cluster (Optional)</label>
-            <input 
-              id="cluster-id"
-              v-model.number="formData.cluster_id" 
-              type="number" 
-              class="form-input"
-              placeholder="Leave empty if not cluster-specific"
-              min="0"
-            />
+            <label for="assigned-clusters">Assigned Clusters (Optional)</label>
+            <select 
+              id="assigned-clusters"
+              v-model="selectedTeamIds" 
+              class="form-input multi-select"
+              multiple
+              size="5"
+              :disabled="loadingPlanningTeamIds"
+            >
+              <option v-for="teamId in planningTeamIds" :key="teamId" :value="teamId">
+                {{ teamId }}
+              </option>
+            </select>
+            <small v-if="planningTeamIds.length === 0" class="help-text">
+              {{ planningTeamIdsMessage || 'Run a plan first to see available cluster-team IDs' }}
+            </small>
+            <small v-else class="help-text">
+              Hold Ctrl (Cmd on Mac) to select multiple cluster-teams. Selected: {{ selectedTeamIds.length }}
+            </small>
           </div>
           
           <div class="form-group">
@@ -442,20 +421,18 @@ async function openAddTeamModal() {
   showAddTeamModal.value = true
 }
 
-function editTeam(team) {
+async function editTeam(team) {
   editingTeam.value = team
   formData.value = { ...team }
   
-  // Convert null to empty string for cluster_id
-  if (formData.value.cluster_id === null || formData.value.cluster_id === undefined) {
-    formData.value.cluster_id = ''
-  }
+  // Load planning team IDs first so the dropdown has options
+  await loadPlanningTeamIds()
   
-  // Split comma-separated team_id into array for display
-  if (team.team_id && team.team_id.includes(',')) {
-    selectedTeamIds.value = team.team_id.split(',').map(id => id.trim())
+  // Split comma-separated assigned_clusters into array for multi-select
+  if (team.assigned_clusters && team.assigned_clusters.includes(',')) {
+    selectedTeamIds.value = team.assigned_clusters.split(',').map(id => id.trim())
   } else {
-    selectedTeamIds.value = team.team_id ? [team.team_id] : []
+    selectedTeamIds.value = team.assigned_clusters ? [team.assigned_clusters] : []
   }
 }
 
@@ -473,9 +450,11 @@ async function saveTeam() {
     // Prepare team data
     const teamData = { ...formData.value }
     
-    // Convert empty cluster_id to null
-    if (teamData.cluster_id === '' || teamData.cluster_id === null) {
-      teamData.cluster_id = null
+    // Convert selectedTeamIds array to comma-separated string for assigned_clusters
+    if (selectedTeamIds.value && selectedTeamIds.value.length > 0) {
+      teamData.assigned_clusters = selectedTeamIds.value.join(',')
+    } else {
+      teamData.assigned_clusters = null
     }
     
     // Convert empty strings to null for optional fields
@@ -489,10 +468,9 @@ async function saveTeam() {
       // Update existing team
       await teamAPI.update(store.workspace, selectedState.value, teamData.team_id, teamData)
     } else {
-      // Create new team (auto-generate ID if not provided)
-      if (!teamData.team_id) {
-        teamData.team_id = await generateTeamId()
-      }
+      // Create new team - backend will auto-generate team_id
+      // Remove team_id from data so backend generates it
+      delete teamData.team_id
       await teamAPI.create(store.workspace, selectedState.value, teamData)
     }
     
@@ -530,11 +508,12 @@ async function deleteTeam() {
 function closeModal() {
   showAddTeamModal.value = false
   editingTeam.value = null
+  selectedTeamIds.value = []
   formData.value = {
     team_id: '',
     team_name: '',
     city: '',
-    cluster_id: null,
+    assigned_clusters: null,
     contact_name: '',
     contact_phone: '',
     contact_email: '',
