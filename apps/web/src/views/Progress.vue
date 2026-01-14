@@ -76,6 +76,43 @@
         </button>
       </div>
       
+      <!-- Filters Section -->
+      <div v-if="progressData && progressData.total_sites > 0" class="filters-section">
+        <div class="filters-toolbar">
+          <h4>Filters</h4>
+          <div class="filter-controls">
+            <div class="filter-item">
+              <label>Status:</label>
+              <select v-model="filterStatus" class="filter-select">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="blocked">Blocked</option>
+              </select>
+            </div>
+            
+            <div class="filter-item">
+              <label>Crew:</label>
+              <select v-model="filterCrew" class="filter-select">
+                <option value="">All Crews</option>
+                <option v-for="crew in uniqueCrews" :key="crew" :value="crew">{{ formatCrewAssignment(crew) }}</option>
+              </select>
+            </div>
+            
+            <div class="filter-item">
+              <label>City:</label>
+              <select v-model="filterCity" class="filter-select">
+                <option value="">All Cities</option>
+                <option v-for="city in uniqueCities" :key="city" :value="city">{{ city }}</option>
+              </select>
+            </div>
+            
+            <button @click="clearFilters" class="btn btn-secondary btn-sm">Clear Filters</button>
+          </div>
+        </div>
+      </div>
+      
       <!-- Bulk Actions Toolbar -->
       <div v-if="progressData && progressData.total_sites > 0" class="bulk-actions-section">
         <div class="bulk-actions-toolbar">
@@ -133,21 +170,47 @@
                   type="checkbox" 
                   @change="toggleSelectAll"
                   :checked="allSelected"
+                  :indeterminate.prop="someSelected"
                 />
               </th>
-              <th class="sticky-left">Street Address</th>
-              <th>Site ID</th>
-              <th>City</th>
-              <th>Status</th>
-              <th>Crew Assigned</th>
-              <th>Scheduled Date</th>
+              <th class="sortable" @click="sortBy('site_id')">
+                Site ID
+                <span class="sort-indicator" v-if="sortColumn === 'site_id'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('street_address')">
+                Street Address
+                <span class="sort-indicator" v-if="sortColumn === 'street_address'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('city')">
+                City
+                <span class="sort-indicator" v-if="sortColumn === 'city'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('cluster_id')">
+                Cluster
+                <span class="sort-indicator" v-if="sortColumn === 'cluster_id'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('status')">
+                Status
+                <span class="sort-indicator" v-if="sortColumn === 'status'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('crew_assigned')">
+                Crew Assigned
+                <span class="sort-indicator" v-if="sortColumn === 'crew_assigned'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('scheduled_date')">
+                Scheduled Date
+                <span class="sort-indicator" v-if="sortColumn === 'scheduled_date'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
               <th>Notes</th>
-              <th>Last Updated</th>
+              <th class="sortable" @click="sortBy('last_updated')">
+                Last Updated
+                <span class="sort-indicator" v-if="sortColumn === 'last_updated'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              </th>
               <th class="sticky-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="site in progressData.progress" :key="site.site_id" :class="{ 'selected-row': isSelected(site.site_id) }">
+            <tr v-for="site in filteredAndSortedProgress" :key="site.site_id" :class="{ 'selected-row': isSelected(site.site_id) }">
               <td class="checkbox-col">
                 <input 
                   type="checkbox" 
@@ -155,9 +218,10 @@
                   @change="toggleSelection(site.site_id)"
                 />
               </td>
-              <td class="street-address sticky-left" :title="site.street1">{{ site.street1 || '-' }}</td>
               <td class="site-id">{{ site.site_id }}</td>
+              <td class="street-address" :title="site.street1">{{ site.street1 || '-' }}</td>
               <td class="city">{{ site.city || '-' }}</td>
+              <td class="cluster">{{ site.cluster_id || '-' }}</td>
               <td>
                 <span 
                   v-if="editingSite !== site.site_id"
@@ -256,6 +320,13 @@ const editForm = ref({
   crew_assigned: '',
   notes: ''
 })
+
+// Sorting and filtering state
+const sortColumn = ref('scheduled_date')
+const sortDirection = ref('asc')
+const filterStatus = ref('')
+const filterCrew = ref('')
+const filterCity = ref('')
 
 // Methods
 async function loadStates() {
@@ -440,6 +511,24 @@ function clearSelection() {
   bulkCrew.value = ''
 }
 
+// Sorting and filtering methods
+function sortBy(column) {
+  if (sortColumn.value === column) {
+    // Toggle direction if clicking same column
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // New column, default to ascending
+    sortColumn.value = column
+    sortDirection.value = 'asc'
+  }
+}
+
+function clearFilters() {
+  filterStatus.value = ''
+  filterCrew.value = ''
+  filterCity.value = ''
+}
+
 // Computed properties for selection state
 const allSelected = computed(() => {
   return progressData.value && 
@@ -462,19 +551,69 @@ const canApplyBulkAction = computed(() => {
   return false
 })
 
+// Computed property for filtered and sorted progress data
+const filteredAndSortedProgress = computed(() => {
+  if (!progressData.value || !progressData.value.progress) return []
+  
+  let filtered = [...progressData.value.progress]
+  
+  // Apply filters
+  if (filterStatus.value) {
+    filtered = filtered.filter(site => site.status === filterStatus.value)
+  }
+  if (filterCrew.value) {
+    filtered = filtered.filter(site => 
+      site.crew_assigned && site.crew_assigned.toLowerCase().includes(filterCrew.value.toLowerCase())
+    )
+  }
+  if (filterCity.value) {
+    filtered = filtered.filter(site => 
+      site.city && site.city.toLowerCase().includes(filterCity.value.toLowerCase())
+    )
+  }
+  
+  // Apply sorting
+  filtered.sort((a, b) => {
+    let aVal = a[sortColumn.value]
+    let bVal = b[sortColumn.value]
+    
+    // Handle null/undefined values
+    if (aVal === null || aVal === undefined) aVal = ''
+    if (bVal === null || bVal === undefined) bVal = ''
+    
+    // Convert to lowercase for string comparison
+    if (typeof aVal === 'string') aVal = aVal.toLowerCase()
+    if (typeof bVal === 'string') bVal = bVal.toLowerCase()
+    
+    // Compare
+    if (aVal < bVal) return sortDirection.value === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortDirection.value === 'asc' ? 1 : -1
+    return 0
+  })
+  
+  return filtered
+})
+
+// Get unique values for filter dropdowns
+const uniqueCrews = computed(() => {
+  if (!progressData.value || !progressData.value.progress) return []
+  const crews = progressData.value.progress
+    .map(site => site.crew_assigned)
+    .filter(crew => crew)
+  return [...new Set(crews)].sort()
+})
+
+const uniqueCities = computed(() => {
+  if (!progressData.value || !progressData.value.progress) return []
+  const cities = progressData.value.progress
+    .map(site => site.city)
+    .filter(city => city)
+  return [...new Set(cities)].sort()
+})
+
 // Bulk action methods
 async function applyBulkAction() {
-  console.log('applyBulkAction called')
-  console.log('canApplyBulkAction:', canApplyBulkAction.value)
-  console.log('selectedSites:', selectedSites.value)
-  console.log('bulkAction:', bulkAction.value)
-  console.log('bulkStatus:', bulkStatus.value)
-  console.log('bulkCrew:', bulkCrew.value)
-  
-  if (!canApplyBulkAction.value || selectedSites.value.length === 0) {
-    console.log('Early return - conditions not met')
-    return
-  }
+  if (!canApplyBulkAction.value || selectedSites.value.length === 0) return
   
   loading.value = true
   error.value = ''
@@ -492,22 +631,17 @@ async function applyBulkAction() {
       updateData.status = 'completed'
     }
     
-    console.log('Sending bulk update with data:', updateData)
     const response = await progressAPI.bulkUpdate(store.workspace, updateData)
-    console.log('Bulk update response:', response.data)
     
     if (response.data.success) {
-      console.log('Bulk update successful:', response.data.message)
       // Reload progress data
       await loadProgress()
       clearSelection()
     } else {
       error.value = response.data.error || 'Failed to apply bulk action'
-      console.error('Bulk update failed:', error.value)
     }
   } catch (err) {
     console.error('Failed to apply bulk action:', err)
-    console.error('Error details:', err.response?.data)
     error.value = `Failed to apply bulk action: ${err.response?.data?.detail || err.message}`
   } finally {
     loading.value = false
@@ -830,6 +964,24 @@ h2 {
   white-space: nowrap;
 }
 
+.progress-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.progress-table th.sortable:hover {
+  background-color: #e5e7eb;
+  color: #1e3a8a;
+}
+
+.sort-indicator {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.7rem;
+  color: #1e3a8a;
+}
+
 .progress-table tbody tr {
   border-bottom: 1px solid #e5e7eb;
   transition: background-color 0.2s;
@@ -925,6 +1077,59 @@ h2 {
   font-size: 0.75rem;
   color: #9ca3af;
   white-space: nowrap;
+}
+
+/* Filters Styling */
+.filters-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filters-toolbar h4 {
+  margin: 0 0 0.75rem 0;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-item label {
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filter-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #1f2937;
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #1e3a8a;
+  box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.1);
 }
 
 /* Bulk Actions Styling */
