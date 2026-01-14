@@ -129,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { authAPI } from '../services/api'
 import { usePlanningStore } from '../stores/planning'
 
@@ -150,6 +150,25 @@ const createSuccess = ref('')
 
 const deleteConfirm = ref(null)
 const deleting = ref(null)
+
+// Handle ESC key to close modals
+function handleEscKey(event) {
+  if (event.key === 'Escape') {
+    deleteConfirm.value = null
+  }
+}
+
+onMounted(() => {
+  // Ensure no modals are stuck open on mount
+  deleteConfirm.value = null
+  
+  // Add ESC key listener
+  window.addEventListener('keydown', handleEscKey)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEscKey)
+})
 
 async function loadUsers() {
   loading.value = true
