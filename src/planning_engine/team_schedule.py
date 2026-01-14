@@ -103,35 +103,36 @@ def load_team_info(workspace_name: str, state_abbr: str, team_id: str) -> Option
         return None
 
 
-def generate_team_schedule_pdf(
-    workspace_name: str,
-    state_abbr: str,
-    team_id: str,
-    output_path: Path
-) -> bool:
+def _prepare_team_schedule_data(workspace_name: str, state_abbr: str, team_id: str) -> Optional[Dict]:
     """
-    Generate a PDF schedule for a specific team.
+    Extract and organize team schedule data for rendering.
+    
+    This helper function loads and prepares all the data needed for generating
+    team schedules in any format (PDF, text, etc.).
     
     Args:
         workspace_name: Name of the workspace
         state_abbr: State abbreviation
-        team_id: Team ID to generate schedule for
-        output_path: Path where PDF should be saved
+        team_id: Team ID to prepare data for
         
     Returns:
-        True if successful, False otherwise
+        Dictionary containing:
+        - team_info: Team object
+        - metadata: Planning metadata
+        - team_routes: List of routes assigned to this team
+        Or None if data cannot be loaded
     """
     # Load planning results
     plan_data = load_latest_plan_result(workspace_name, state_abbr)
     if not plan_data:
         print(f"No planning results found for {workspace_name}/{state_abbr}")
-        return False
+        return None
     
     # Load team information
     team_info = load_team_info(workspace_name, state_abbr, team_id)
     if not team_info:
         print(f"Team {team_id} not found")
-        return False
+        return None
     
     # Extract team days for this team
     result = plan_data.get('result', {})
@@ -159,7 +160,41 @@ def generate_team_schedule_pdf(
     
     if not team_routes:
         print(f"No routes found for team ID(s): {team_id}")
+        return None
+    
+    return {
+        'team_info': team_info,
+        'metadata': metadata,
+        'team_routes': team_routes
+    }
+
+
+def generate_team_schedule_pdf(
+    workspace_name: str,
+    state_abbr: str,
+    team_id: str,
+    output_path: Path
+) -> bool:
+    """
+    Generate a PDF schedule for a specific team.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        team_id: Team ID to generate schedule for
+        output_path: Path where PDF should be saved
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    # Prepare schedule data
+    schedule_data = _prepare_team_schedule_data(workspace_name, state_abbr, team_id)
+    if not schedule_data:
         return False
+    
+    team_info = schedule_data['team_info']
+    metadata = schedule_data['metadata']
+    team_routes = schedule_data['team_routes']
     
     # Create PDF
     doc = SimpleDocTemplate(
@@ -381,6 +416,148 @@ def generate_team_schedule_pdf(
         return True
     except Exception as e:
         print(f"Error building PDF: {e}")
+        return False
+
+
+def generate_team_schedule_text(
+    workspace_name: str,
+    state_abbr: str,
+    team_id: str,
+    output_path: Path
+) -> bool:
+    """
+    Generate a text schedule for a specific team.
+    
+    Args:
+        workspace_name: Name of the workspace
+        state_abbr: State abbreviation
+        team_id: Team ID to generate schedule for
+        output_path: Path where text file should be saved
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    # Prepare schedule data
+    schedule_data = _prepare_team_schedule_data(workspace_name, state_abbr, team_id)
+    if not schedule_data:
+        return False
+    
+    team_info = schedule_data['team_info']
+    metadata = schedule_data['metadata']
+    team_routes = schedule_data['team_routes']
+    
+    # Sort routes by date if available (same as PDF)
+    team_routes_sorted = sorted(team_routes, key=lambda x: x.get('date', ''))
+    
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            # Header
+            f.write("=" * 100 + "\n")
+            f.write("TEAM ROUTE SCHEDULE".center(100) + "\n")
+            f.write("=" * 100 + "\n\n")
+            
+            # Team Information Section
+            f.write("TEAM INFORMATION\n")
+            f.write("-" * 100 + "\n")
+            f.write(f"Team ID:        {team_id}\n")
+            f.write(f"Team Name:      {team_info.team_name}\n")
+            f.write(f"City:           {team_info.city}\n")
+            f.write(f"Contact:        {team_info.contact_name or 'N/A'}\n")
+            f.write(f"Phone:          {team_info.contact_phone or 'N/A'}\n")
+            f.write(f"Email:          {team_info.contact_email or 'N/A'}\n")
+            if team_info.cluster_id is not None:
+                f.write(f"Cluster:        Cluster {team_info.cluster_id}\n")
+            f.write("\n")
+            
+            # Planning Details Section
+            f.write("PLANNING DETAILS\n")
+            f.write("-" * 100 + "\n")
+            f.write(f"Workspace:      {metadata.get('workspace', 'N/A')}\n")
+            f.write(f"State:          {metadata.get('state_abbr', 'N/A')}\n")
+            
+            timestamp_str = 'N/A'
+            if metadata.get('timestamp'):
+                try:
+                    timestamp_str = datetime.fromisoformat(metadata['timestamp']).strftime('%Y-%m-%d %H:%M')
+                except:
+                    pass
+            f.write(f"Generated:      {timestamp_str}\n")
+            f.write(f"Total Routes:   {len(team_routes)}\n")
+            f.write(f"Max Route Duration: {metadata.get('max_route_minutes', 480)} minutes\n")
+            f.write("\n")
+            
+            # Routes Section
+            for idx, route in enumerate(team_routes_sorted, 1):
+                # Route header with date (same as PDF)
+                route_date = route.get('date', 'N/A')
+                route_header = f"ROUTE {idx}"
+                if route_date != 'N/A':
+                    route_header += f" - {route_date}"
+                
+                sites = route.get('sites', [])
+                
+                # Calculate totals
+                service_mins = route.get('service_minutes', 0)
+                travel_mins = route.get('travel_minutes', 0)
+                total_mins = service_mins + travel_mins
+                
+                # Route Header
+                f.write("=" * 100 + "\n")
+                f.write(f"{route_header}\n")
+                f.write("=" * 100 + "\n")
+                f.write(f"Total Sites:        {len(sites)}\n")
+                f.write(f"Service Time:       {service_mins} minutes\n")
+                f.write(f"Travel Time:        {travel_mins} minutes\n")
+                f.write(f"Total Duration:     {total_mins} minutes\n")
+                f.write("\n")
+                
+                # Sites Header
+                f.write("SITES:\n")
+                f.write("-" * 100 + "\n")
+                
+                # Sites - display each site with full information
+                for site_idx, site in enumerate(sites, 1):
+                    site_id = site.get('id', 'N/A')
+                    site_name = site.get('name', 'N/A')
+                    
+                    # Build address
+                    address_parts = []
+                    if site.get('address'):
+                        address_parts.append(site['address'])
+                    if site.get('city'):
+                        address_parts.append(site['city'])
+                    if site.get('state'):
+                        address_parts.append(site['state'])
+                    if site.get('zip'):
+                        address_parts.append(site['zip'])
+                    
+                    address = ', '.join(address_parts) if address_parts else 'N/A'
+                    service_time = site.get('service_minutes', 60)
+                    
+                    # Site information - no truncation
+                    f.write(f"\nSite {site_idx}:\n")
+                    f.write(f"  Site ID:      {site_id}\n")
+                    f.write(f"  Name:         {site_name}\n")
+                    f.write(f"  Address:      {address}\n")
+                    f.write(f"  Service Time: {service_time} minutes\n")
+                    
+                    # Contact info (if available)
+                    contact_name = site.get('contact_name', '')
+                    contact_phone = site.get('contact_phone', '')
+                    
+                    if contact_name or contact_phone:
+                        contact_info = f"{contact_name}"
+                        if contact_phone:
+                            contact_info += f" ({contact_phone})"
+                        f.write(f"  Contact:      {contact_info}\n")
+                
+                # Add spacing between routes
+                f.write("\n")
+        
+        return True
+    
+    except Exception as e:
+        print(f"Error generating text schedule: {e}")
         return False
 
 

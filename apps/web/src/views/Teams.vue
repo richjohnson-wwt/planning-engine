@@ -553,29 +553,43 @@ async function generateTeamSchedule(teamId) {
     const response = await teamAPI.generateSchedule(store.workspace, selectedState.value, teamId)
     
     console.log('Schedule response received:', response)
-    console.log('Response data type:', typeof response.data)
-    console.log('Response data:', response.data)
+    console.log('Response headers:', response.headers)
     
     // Verify we have valid data
     if (!response.data) {
       throw new Error('No data received from server')
     }
     
-    // Create a blob from the response
-    const blob = new Blob([response.data], { type: 'application/pdf' })
+    // Get content type from response headers
+    const contentType = response.headers['content-type'] || 'application/pdf'
+    console.log('Content-Type:', contentType)
     
-    console.log('Blob created:', blob.size, 'bytes')
+    // Extract filename from Content-Disposition header if available
+    let filename = `schedule_${teamId}_${new Date().toISOString().split('T')[0]}.pdf`
+    const contentDisposition = response.headers['content-disposition']
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '')
+        console.log('Extracted filename from header:', filename)
+      }
+    }
+    
+    // Create a blob from the response with the correct content type
+    const blob = new Blob([response.data], { type: contentType })
+    
+    console.log('Blob created:', blob.size, 'bytes, type:', contentType)
     
     // Verify blob has content
     if (blob.size === 0) {
-      throw new Error('Received empty PDF file')
+      throw new Error('Received empty file')
     }
     
     // Create download link
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `schedule_${teamId}_${new Date().toISOString().split('T')[0]}.pdf`
+    link.download = filename
     document.body.appendChild(link)
     link.click()
     
@@ -583,7 +597,7 @@ async function generateTeamSchedule(teamId) {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     
-    console.log('Schedule downloaded successfully')
+    console.log('Schedule downloaded successfully:', filename)
   } catch (err) {
     console.error('Failed to generate schedule:', err)
     console.error('Error details:', err.message, err.response)

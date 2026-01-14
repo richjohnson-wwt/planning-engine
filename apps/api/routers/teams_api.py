@@ -204,32 +204,50 @@ async def generate_team_schedule(
     current_user: UserInDB = Depends(set_user_context)
 ):
     """
-    Generate a PDF schedule for a specific team.
+    Generate a schedule for a specific team (PDF or Text format).
     
-    Returns the PDF file for download.
+    Returns the schedule file for download.
     Requires that:
     1. A planning result exists for the workspace/state
     2. The team exists in teams.csv
     3. The team has assigned routes in the planning result
     """
-    from planning_engine.team_schedule import generate_team_schedule_pdf
+    from planning_engine.team_schedule import generate_team_schedule_pdf, generate_team_schedule_text
     
     try:
-        # Create temporary file for PDF
+        # Create temporary file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         temp_dir = Path(tempfile.gettempdir())
         # Sanitize team_id for filename (replace commas with underscores to avoid HTTP header issues)
         safe_team_id = team_id.replace(',', '_')
-        pdf_filename = f"schedule_{safe_team_id}_{timestamp}.pdf"
-        pdf_path = temp_dir / pdf_filename
         
-        # Generate PDF
-        success = generate_team_schedule_pdf(
-            workspace_name,
-            state_abbr,
-            team_id,
-            pdf_path
-        )
+        # Toggle between PDF and Text formats for demo
+        use_pdf = False  # Set to False to demo text format
+        
+        print(f"DEBUG: use_pdf = {use_pdf}")  # Debug logging
+        
+        if use_pdf:
+            # Generate PDF
+            filename = f"schedule_{safe_team_id}_{timestamp}.pdf"
+            file_path = temp_dir / filename
+            success = generate_team_schedule_pdf(
+                workspace_name,
+                state_abbr,
+                team_id,
+                file_path
+            )
+            media_type = "application/pdf"
+        else:
+            # Generate Text
+            filename = f"schedule_{safe_team_id}_{timestamp}.txt"
+            file_path = temp_dir / filename
+            success = generate_team_schedule_text(
+                workspace_name,
+                state_abbr,
+                team_id,
+                file_path
+            )
+            media_type = "text/plain"
         
         if not success:
             raise HTTPException(
@@ -237,13 +255,16 @@ async def generate_team_schedule(
                 detail=f"Could not generate schedule for team {team_id}. Check that planning results exist and team has assigned routes."
             )
         
-        # Return PDF file
+        # Return file
         return FileResponse(
-            path=str(pdf_path),
-            filename=pdf_filename,
-            media_type="application/pdf",
+            path=str(file_path),
+            filename=filename,
+            media_type=media_type,
             headers={
-                "Content-Disposition": f"attachment; filename={pdf_filename}"
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
             }
         )
     
