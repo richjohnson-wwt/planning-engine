@@ -1,6 +1,7 @@
 import requests
 import time
 from planning_engine.models import Site
+from planning_engine.data_prep.geocode_cache import get_cache
 
 API_KEY = "58c0f7b0515d4094bb6a48ab559290f3"
 
@@ -8,6 +9,9 @@ API_KEY = "58c0f7b0515d4094bb6a48ab559290f3"
 def batch_geocode_sites(addresses: list[str]) -> list[dict]:
     """
     Geocode a list of addresses using the Geoapify batch API.
+    
+    Checks the shared cache first to avoid unnecessary API calls.
+    Only geocodes addresses that are not already cached.
     
     Args:
         addresses: List of address strings to geocode
@@ -18,11 +22,92 @@ def batch_geocode_sites(addresses: list[str]) -> list[dict]:
     Raises:
         Exception: If the geocoding job fails
     """
+    if not addresses:
+        return []
+    
+    cache = get_cache()
+    
+    # Parse addresses and check cache
+    # Addresses are expected in format: "street, city, state zip"
+    parsed_addresses = []
+    address_to_index = {}  # Map cache key to original index
+    
+    for idx, addr_str in enumerate(addresses):
+        # Parse the address string
+        parts = [p.strip() for p in addr_str.split(',')]
+        if len(parts) >= 3:
+            street = parts[0]
+            city = parts[1]
+            # State and zip might be together in last part
+            state_zip = parts[2].split()
+            state = state_zip[0] if state_zip else ''
+            zip_code = state_zip[1] if len(state_zip) > 1 else None
+            
+            # Clean up ZIP code - remove .0 if it's a float string
+            if zip_code and '.' in zip_code:
+                try:
+                    # Convert to float then int to remove decimal
+                    zip_code = str(int(float(zip_code)))
+                except (ValueError, TypeError):
+                    pass  # Keep original if conversion fails
+            
+            parsed_addresses.append((street, city, state, zip_code))
+            cache_key = cache._hash_address(street, city, state, zip_code)
+            address_to_index[cache_key] = idx
+        else:
+            # Malformed address, will need to geocode it
+            parsed_addresses.append((addr_str, '', '', None))
+            cache_key = cache._hash_address(addr_str, '', '', None)
+            address_to_index[cache_key] = idx
+    
+    # Batch check cache
+    print(f"Checking cache for {len(parsed_addresses)} addresses...")
+    cache_results = cache.batch_get(parsed_addresses)
+    
+    # Separate cached vs uncached addresses
+    cached_count = sum(1 for v in cache_results.values() if v is not None)
+    uncached_indices = []
+    uncached_addresses = []
+    results = [None] * len(addresses)  # Pre-allocate results array
+    
+    for cache_key, cache_result in cache_results.items():
+        idx = address_to_index[cache_key]
+        if cache_result is not None:
+            # Use cached result - convert to Geoapify API response format
+            # The API returns results with lat/lon at the top level
+            results[idx] = {
+                'lat': cache_result['lat'],
+                'lon': cache_result['lon'],
+                'properties': {
+                    'lat': cache_result['lat'],
+                    'lon': cache_result['lon'],
+                    'formatted': cache_result['formatted'],
+                    'street': cache_result['street1'],
+                    'city': cache_result['city'],
+                    'state': cache_result['state'],
+                    'postcode': cache_result['zip']
+                }
+            }
+        else:
+            # Need to geocode this address
+            uncached_indices.append(idx)
+            uncached_addresses.append(addresses[idx])
+    
+    print(f"✓ Cache hit: {cached_count}/{len(addresses)} addresses ({cached_count*100//len(addresses)}%)")
+    
+    # If all addresses were cached, return immediately
+    if not uncached_addresses:
+        print("✓ All addresses found in cache - no API calls needed!")
+        return results
+    
+    print(f"Geocoding {len(uncached_addresses)} new addresses via API...")
+    
+    # Geocode uncached addresses via API
     # Correct Geoapify batch API URL (note: apiKey not api_key)
     url = f"https://api.geoapify.com/v1/batch/geocode/search?apiKey={API_KEY}"
     
     # Start the batch geocoding job
-    response = requests.post(url, json=addresses)
+    response = requests.post(url, json=uncached_addresses)
     
     # Check for HTTP errors (202 Accepted is correct for async batch jobs)
     if response.status_code not in [200, 202]:
@@ -58,13 +143,53 @@ def batch_geocode_sites(addresses: list[str]) -> list[dict]:
         
         # When the job is finished, status code is 200 and the response IS the results array
         if status_resp.status_code == 200:
-            results = status_resp.json()
+            api_results = status_resp.json()
             # Results should be a list of geocoded addresses
-            if isinstance(results, list):
-                print(f"✓ Geocoding completed: {len(results)} addresses processed")
+            if isinstance(api_results, list):
+                print(f"✓ Geocoding completed: {len(api_results)} addresses processed")
+                
+                # Cache the new results
+                print("Caching newly geocoded addresses...")
+                cache_entries = []
+                for i, api_result in enumerate(api_results):
+                    idx = uncached_indices[i]
+                    
+                    # Extract data from API result
+                    # Geoapify batch API returns flat structure with lat/lon at top level
+                    lat = api_result.get('lat')
+                    lon = api_result.get('lon')
+                    
+                    if lat and lon:
+                        # Parse the original address
+                        street, city, state, zip_code = parsed_addresses[idx]
+                        
+                        # Prepare cache entry
+                        cache_entries.append({
+                            'street': street,
+                            'city': city,
+                            'state': state,
+                            'zip': zip_code,
+                            'lat': lat,
+                            'lon': lon,
+                            'formatted': api_result.get('formatted')
+                        })
+                        
+                        # Add to results array with both flat and nested structure
+                        # for compatibility with downstream code
+                        results[idx] = {
+                            'lat': lat,
+                            'lon': lon,
+                            'properties': api_result  # Store full result in properties
+                        }
+                
+                # Batch cache all new results
+                if cache_entries:
+                    cache.batch_set(cache_entries)
+                    print(f"✓ Cached {len(cache_entries)} new addresses")
+                
                 return results
             else:
-                raise Exception(f"Unexpected response format: {type(results)}")
+                raise Exception(f"Unexpected response format: {type(api_results)}")
         
         # When still pending, status code is 202 and response has status field
         elif status_resp.status_code == 202:

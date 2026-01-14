@@ -196,7 +196,21 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
             parts.append(street2)
         
         city = normalize_address_component(row['city'])
-        parts.append(f"{city}, {row['state']} {row['zip']}")
+        
+        # Format ZIP code - convert float to int string if needed
+        zip_code = row['zip']
+        if pd.notna(zip_code):
+            # Convert to string, removing .0 if it's a float
+            zip_str = str(zip_code)
+            if '.' in zip_str:
+                try:
+                    zip_str = str(int(float(zip_str)))
+                except (ValueError, TypeError):
+                    pass  # Keep original if conversion fails
+        else:
+            zip_str = ''
+        
+        parts.append(f"{city}, {row['state']} {zip_str}")
         address = ", ".join(parts)
         addresses.append(address)
     
