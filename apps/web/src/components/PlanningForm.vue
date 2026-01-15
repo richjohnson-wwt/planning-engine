@@ -99,6 +99,31 @@
             ✓ Using {{ clusterInfo.cluster_count }} clusters for {{ clusterInfo.total_sites }} sites
           </p>
         </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" v-model="formData.fast_mode" />
+            Fast Mode (Exploration & Testing)
+          </label>
+          <p class="help-text">
+            Reduces solver time from 15 seconds to 1 second per day (~15x faster). 
+            Use for exploring different configurations before running the final optimized plan.
+          </p>
+          <div v-if="formData.fast_mode" class="danger-banner">
+            <strong>⚠️ WARNING: Fast Mode Enabled</strong>
+            <p>
+              Fast mode produces LESS OPTIMAL routes and should NOT be used for final production planning.
+              Routes will be longer, less efficient, and may have more unassigned sites.
+            </p>
+            <p style="margin-top: 0.5rem;">
+              <strong>Good for:</strong> Exploring cluster configurations, comparing fixed-crew vs fixed-calendar modes, 
+              testing different date ranges, or development/debugging.
+            </p>
+            <p style="margin-top: 0.5rem;">
+              <strong>Final step:</strong> Disable fast mode and re-run to generate the optimized production plan.
+            </p>
+          </div>
+        </div>
       </div>
       
       <!-- Team Configuration -->
@@ -414,6 +439,28 @@ input[type="radio"] {
   color: #065f46;
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.danger-banner {
+  margin: 0.75rem 0 0 0;
+  padding: 1rem;
+  background-color: #fee2e2;
+  border: 2px solid #dc2626;
+  border-radius: 6px;
+  color: #991b1b;
+}
+
+.danger-banner strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: #dc2626;
+}
+
+.danger-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .btn {
