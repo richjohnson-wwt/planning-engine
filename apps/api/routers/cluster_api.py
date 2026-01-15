@@ -29,13 +29,15 @@ async def set_user_context(current_user: UserInDB = Depends(get_current_user)) -
 class ClusterRequest(BaseModel):
     workspace_name: str
     state_abbr: str
+    max_diameter_miles: float = 100
     
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
                     "workspace_name": "my_project_2025",
-                    "state_abbr": "LA"
+                    "state_abbr": "LA",
+                    "max_diameter_miles": 100
                 }
             ]
         }
@@ -47,12 +49,24 @@ class ClusterResponse(BaseModel):
     message: str
     sites_clustered: int
     num_clusters: int
+    max_diameter_miles: float
 
 
 @router.post("/cluster", response_model=ClusterResponse)
 def cluster_sites(request: ClusterRequest, current_user: UserInDB = Depends(set_user_context)):
-    """Cluster geocoded sites based on geographic coordinates"""
-    output_path = cluster(workspace_name=request.workspace_name, state_abbr=request.state_abbr)
+    """
+    Cluster geocoded sites based on geographic coordinates with diameter constraints.
+    
+    The max_diameter_miles parameter controls how geographically spread clusters can be:
+    - Tight (50-75 miles): Dense urban areas, shorter workdays, more focused territories
+    - Normal (100 miles): Recommended default for most scenarios
+    - Loose (125-150 miles): Rural areas with sparse sites, longer workdays
+    """
+    output_path = cluster(
+        workspace_name=request.workspace_name, 
+        state_abbr=request.state_abbr,
+        max_diameter_miles=request.max_diameter_miles
+    )
     
     # Get cluster statistics
     df = pd.read_csv(output_path)
@@ -61,9 +75,10 @@ def cluster_sites(request: ClusterRequest, current_user: UserInDB = Depends(set_
     
     return ClusterResponse(
         output_path=str(output_path),
-        message=f"Clustering completed for state '{request.state_abbr}'. {sites_count} sites assigned to {num_clusters} clusters",
+        message=f"Clustering completed for state '{request.state_abbr}'. {sites_count} sites assigned to {num_clusters} clusters (max diameter: {request.max_diameter_miles} miles)",
         sites_clustered=sites_count,
-        num_clusters=num_clusters
+        num_clusters=num_clusters,
+        max_diameter_miles=request.max_diameter_miles
     )
 
 

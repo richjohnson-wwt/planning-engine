@@ -274,17 +274,26 @@ def geocode(workspace_name: str, state_abbr: str) -> Path:
     return output_path
 
 
-def cluster(workspace_name: str, state_abbr: str) -> Path:
+def cluster(workspace_name: str, state_abbr: str, max_diameter_miles: float = 100) -> Path:
     """
-    Cluster geocoded sites based on their geographic coordinates.
+    Cluster geocoded sites based on their geographic coordinates with diameter constraints.
     
     Uses automatic k-means clustering with optimal cluster count determined
-    by silhouette score analysis. Reads from cache/{state_abbr}/geocoded.csv and saves
-    results to cache/{state_abbr}/clustered.csv.
+    by silhouette score and geographic constraints. Iteratively splits clusters
+    that exceed the maximum diameter to ensure teams don't have to travel
+    excessive distances within a cluster.
+    
+    Reads from cache/{state_abbr}/geocoded.csv and saves results to 
+    cache/{state_abbr}/clustered.csv.
     
     Args:
         workspace_name: Name of the workspace containing geocoded.csv
         state_abbr: State abbreviation (e.g., "LA", "NC")
+        max_diameter_miles: Maximum allowed cluster diameter in miles (default: 100).
+                           Recommended values:
+                           - Tight (50-75): Dense urban areas, shorter workdays
+                           - Normal (100): Recommended for most scenarios
+                           - Loose (125-150): Rural areas, longer workdays
         
     Returns:
         Path to the created clustered.csv file
@@ -303,9 +312,10 @@ def cluster(workspace_name: str, state_abbr: str) -> Path:
     # Read geocoded data
     df = pd.read_csv(geocoded_csv)
     print(f"Clustering {len(df)} sites for state '{state_abbr}' from {geocoded_csv}...")
+    print(f"Using max cluster diameter: {max_diameter_miles} miles")
     
-    # Perform clustering
-    df_clustered = cluster_sites(df)
+    # Perform clustering with diameter constraint
+    df_clustered = cluster_sites(df, max_diameter_miles=max_diameter_miles)
     
     # Save to state-specific cache directory
     output_path = workspace_path / "cache" / state_abbr / "clustered.csv"

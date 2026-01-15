@@ -48,7 +48,53 @@
         <p class="help-text">Fix incorrectly geocoded addresses or coordinates</p>
       </div>
 
-      <!-- 4. State Selection and Geocoding -->
+      <!-- 4. Clustering Settings -->
+      <div class="control-section">
+        <label class="control-label">Clustering Settings</label>
+        <div class="cluster-settings">
+          <label class="setting-label">Max Cluster Diameter</label>
+          <div class="preset-buttons">
+            <button 
+              @click="maxDiameterMiles = 50" 
+              :class="{ 'active': maxDiameterMiles === 50 }"
+              class="preset-btn"
+              type="button"
+            >
+              Tight (50 mi)
+            </button>
+            <button 
+              @click="maxDiameterMiles = 75" 
+              :class="{ 'active': maxDiameterMiles === 75 }"
+              class="preset-btn"
+              type="button"
+            >
+              Medium (75 mi)
+            </button>
+            <button 
+              @click="maxDiameterMiles = 100" 
+              :class="{ 'active': maxDiameterMiles === 100 }"
+              class="preset-btn"
+              type="button"
+            >
+              Normal (100 mi) ✓
+            </button>
+            <button 
+              @click="maxDiameterMiles = 150" 
+              :class="{ 'active': maxDiameterMiles === 150 }"
+              class="preset-btn"
+              type="button"
+            >
+              Loose (150 mi)
+            </button>
+          </div>
+          <p class="help-text">
+            Controls how geographically spread clusters can be. Tighter clusters create more focused team territories.
+            Current setting: <strong>{{ maxDiameterMiles }} miles</strong>
+          </p>
+        </div>
+      </div>
+
+      <!-- 5. State Selection and Geocoding -->
       <div class="control-section">
         <label class="control-label">States</label>
         <p class="help-text" v-if="!excelComplete">Parse Excel data first to see available states</p>
@@ -64,6 +110,7 @@
                 <th class="col-sites">Sites</th>
                 <th class="col-clusters">Clusters</th>
                 <th class="col-geocode">Geocode</th>
+                <th class="col-cluster">Cluster</th>
                 <th class="col-errors">Errors</th>
               </tr>
             </thead>
@@ -98,6 +145,17 @@
                     {{ geocodingState === state.name ? 'Geocoding...' : 'Geocode' }}
                   </button>
                   <span v-else class="status-complete">✓ Complete</span>
+                </td>
+                <td class="col-cluster">
+                  <button
+                    v-if="state.geocoded"
+                    @click="handleRecluster(state.name)"
+                    class="btn-cluster"
+                    :disabled="clusteringState === state.name"
+                  >
+                    {{ clusteringState === state.name ? 'Clustering...' : 'Re-cluster' }}
+                  </button>
+                  <span v-else>-</span>
                 </td>
                 <td class="col-errors">
                   <span 
@@ -221,6 +279,8 @@ const excelComplete = ref(false)
 const showExcelModal = ref(false)
 const showErrorDialog = ref(false)
 const geocodingState = ref(null)
+const clusteringState = ref(null) // Track which state is currently clustering
+const maxDiameterMiles = ref(100) // Default to 100 miles (Normal preset)
 
 // Initialize state input from store
 onMounted(() => {
@@ -302,7 +362,7 @@ async function handleGeocode(stateName) {
   if (geocodeSuccess) {
     try {
       // Automatically run clustering after geocoding (it's fast and always useful)
-      await clusterAPI.cluster(store.workspace, stateName)
+      await clusterAPI.cluster(store.workspace, stateName, maxDiameterMiles.value)
       
       // Refresh state list to update geocode status
       await loadStates(store.workspace)
@@ -322,6 +382,30 @@ async function handleGeocode(stateName) {
   }
   
   geocodingState.value = null
+}
+
+async function handleRecluster(stateName) {
+  if (!store.workspace) {
+    alert('Please select a workspace first')
+    return
+  }
+
+  clusteringState.value = stateName
+
+  try {
+    // Run clustering with the current maxDiameterMiles setting
+    await clusterAPI.cluster(store.workspace, stateName, maxDiameterMiles.value)
+    
+    // Refresh state list to update cluster count
+    await loadStates(store.workspace)
+    
+    alert(`Re-clustering completed for ${stateName}! Created clusters with max diameter of ${maxDiameterMiles.value} miles.`)
+  } catch (err) {
+    console.error('Error clustering:', err)
+    alert(`Error: ${err.response?.data?.detail || err.message}`)
+  }
+  
+  clusteringState.value = null
 }
 
 function getStatePlaceholder() {
@@ -708,6 +792,11 @@ h2 {
   text-align: center;
 }
 
+.col-cluster {
+  width: 140px;
+  text-align: center;
+}
+
 .col-errors {
   width: 80px;
   text-align: center;
@@ -760,6 +849,27 @@ h2 {
 }
 
 .btn-geocode:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cluster {
+  padding: 0.375rem 0.75rem;
+  background-color: #059669;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-cluster:hover:not(:disabled) {
+  background-color: #047857;
+}
+
+.btn-cluster:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -868,6 +978,52 @@ h2 {
   background: #fee2e2;
   border-radius: 6px;
   color: #991b1b;
+}
+
+/* Clustering Settings Styles */
+.cluster-settings {
+  margin-top: 0.5rem;
+}
+
+.setting-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.preset-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.preset-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 0.625rem 1rem;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-btn:hover {
+  border-color: #1e3a8a;
+  background: #f9fafb;
+}
+
+.preset-btn.active {
+  border-color: #1e3a8a;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

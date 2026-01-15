@@ -28,21 +28,44 @@ def generate_folium_map(result: PlanResult, output_path: Path) -> Path:
         Path to the generated HTML file
     """
     # Define color families for clusters (each cluster gets a color family)
-    # Teams within the same cluster will use variations of the same base color
+    # Expanded to support 25+ clusters with distinct, visually different colors
+    # Each cluster gets a set of related colors for its teams
     cluster_color_families = {
         0: ['blue', 'darkblue', 'lightblue', 'cadetblue'],
         1: ['red', 'darkred', 'lightred', 'pink'],
-        2: ['green', 'darkgreen', 'lightgreen', 'lightgray'],
-        3: ['purple', 'darkpurple', 'beige', 'gray'],
-        4: ['orange', 'black', 'white', 'lightgray'],
+        2: ['green', 'darkgreen', 'lightgreen'],
+        3: ['purple', 'darkpurple'],
+        4: ['orange', 'darkorange'],
+        5: ['beige', 'lightgray'],
+        6: ['gray', 'darkgray'],
+        7: ['black'],
+        8: ['white'],
+        9: ['cadetblue', 'lightblue'],
+        10: ['pink', 'lightred'],
+        11: ['lightgreen', 'green'],
+        12: ['darkpurple', 'purple'],
+        13: ['darkorange', 'orange'],
+        14: ['darkblue', 'blue'],
+        15: ['darkred', 'red'],
+        16: ['darkgreen', 'green'],
+        17: ['lightgray', 'gray'],
+        18: ['beige', 'lightgray'],
+        19: ['cadetblue', 'blue'],
+        20: ['pink', 'red'],
+        21: ['lightgreen', 'darkgreen'],
+        22: ['purple', 'darkpurple'],
+        23: ['orange', 'darkorange'],
+        24: ['gray', 'black'],
     }
     
     # Fallback colors if we have more clusters than defined families
+    # Highly diverse color palette to maximize visual distinction
     fallback_colors = [
         'blue', 'red', 'green', 'purple', 'orange', 
-        'darkred', 'lightred', 'beige', 'darkblue', 'darkgreen',
-        'cadetblue', 'darkpurple', 'pink', 'lightblue', 'lightgreen',
-        'gray', 'black', 'lightgray'
+        'darkred', 'darkblue', 'darkgreen', 'darkpurple', 'cadetblue',
+        'pink', 'lightblue', 'lightgreen', 'lightred', 'beige',
+        'gray', 'darkgray', 'lightgray', 'black', 'white',
+        'darkorange'
     ]
     
     def get_team_color(team_day: TeamDay) -> str:

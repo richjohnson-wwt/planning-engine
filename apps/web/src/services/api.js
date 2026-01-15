@@ -145,11 +145,11 @@ export const geocodeAPI = {
 
 // Clustering API
 export const clusterAPI = {
-  cluster(workspaceName, stateAbbr, numClusters = null) {
+  cluster(workspaceName, stateAbbr, maxDiameterMiles = 100) {
     return api.post('/cluster', {
       workspace_name: workspaceName,
       state_abbr: stateAbbr,
-      num_clusters: numClusters
+      max_diameter_miles: maxDiameterMiles
     })
   }
 }
