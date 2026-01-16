@@ -101,6 +101,23 @@
         <p class="help-text" v-else-if="loadingStates">Loading states...</p>
         <p class="help-text" v-else-if="availableStates.length === 0">No states found in parsed data</p>
         
+        <!-- Bulk Geocode Button -->
+        <div v-if="excelComplete && availableStates.length > 0" class="bulk-actions">
+          <button
+            @click="handleGeocodeAll"
+            class="btn-geocode-all"
+            :disabled="geocodingAllStates || geocodingState !== null"
+          >
+            <span v-if="!geocodingAllStates">🌍 Geocode All States</span>
+            <span v-else>
+              Geocoding {{ currentGeocodeState }}... ({{ geocodeProgress.current }}/{{ geocodeProgress.total }})
+            </span>
+          </button>
+          <p v-if="geocodingAllStates" class="progress-text">
+            This may take several minutes. Please wait...
+          </p>
+        </div>
+        
         <div v-if="excelComplete && availableStates.length > 0" class="state-table-container">
           <table class="state-table">
             <thead>
@@ -281,6 +298,9 @@ const showErrorDialog = ref(false)
 const geocodingState = ref(null)
 const clusteringState = ref(null) // Track which state is currently clustering
 const maxDiameterMiles = ref(100) // Default to 100 miles (Normal preset)
+const geocodingAllStates = ref(false) // Track if bulk geocoding is in progress
+const currentGeocodeState = ref('') // Current state being geocoded in bulk operation
+const geocodeProgress = ref({ current: 0, total: 0 }) // Progress tracking for bulk geocode
 
 // Initialize state input from store
 onMounted(() => {
@@ -382,6 +402,86 @@ async function handleGeocode(stateName) {
   }
   
   geocodingState.value = null
+}
+
+async function handleGeocodeAll() {
+  if (!store.workspace) {
+    alert('Please select a workspace first')
+    return
+  }
+
+  // Get all states that need geocoding (not already geocoded)
+  const statesToGeocode = availableStates.value.filter(state => !state.geocoded)
+  
+  if (statesToGeocode.length === 0) {
+    alert('All states are already geocoded!')
+    return
+  }
+
+  const confirmMessage = `This will geocode ${statesToGeocode.length} state(s): ${statesToGeocode.map(s => s.name).join(', ')}.\n\nThis may take several minutes. Continue?`
+  if (!confirm(confirmMessage)) {
+    return
+  }
+
+  geocodingAllStates.value = true
+  geocodeProgress.value = { current: 0, total: statesToGeocode.length }
+  
+  const results = {
+    success: [],
+    failed: [],
+    withErrors: []
+  }
+
+  for (let i = 0; i < statesToGeocode.length; i++) {
+    const state = statesToGeocode[i]
+    currentGeocodeState.value = state.name
+    geocodeProgress.value.current = i + 1
+
+    try {
+      // Geocode the state
+      const geocodeResponse = await geocodeAPI.geocode(store.workspace, state.name)
+      const geocodeMessage = geocodeResponse.data?.message || 'Geocoding completed'
+      
+      // Automatically run clustering after geocoding
+      try {
+        await clusterAPI.cluster(store.workspace, state.name, maxDiameterMiles.value)
+        
+        if (geocodeMessage.includes('error')) {
+          results.withErrors.push(state.name)
+        } else {
+          results.success.push(state.name)
+        }
+      } catch (clusterErr) {
+        console.error(`Error clustering ${state.name}:`, clusterErr)
+        results.withErrors.push(state.name)
+      }
+    } catch (err) {
+      console.error(`Error geocoding ${state.name}:`, err)
+      results.failed.push(state.name)
+    }
+  }
+
+  // Refresh state list to show updated status
+  await loadStates(store.workspace)
+  
+  // Reset bulk geocoding state
+  geocodingAllStates.value = false
+  currentGeocodeState.value = ''
+  geocodeProgress.value = { current: 0, total: 0 }
+
+  // Show summary message
+  let summaryMessage = 'Bulk Geocoding Complete!\n\n'
+  if (results.success.length > 0) {
+    summaryMessage += `✓ Successfully geocoded and clustered: ${results.success.join(', ')}\n\n`
+  }
+  if (results.withErrors.length > 0) {
+    summaryMessage += `⚠ Geocoded with some errors: ${results.withErrors.join(', ')}\n(Check the Errors column for details)\n\n`
+  }
+  if (results.failed.length > 0) {
+    summaryMessage += `✗ Failed to geocode: ${results.failed.join(', ')}\n\n`
+  }
+  
+  alert(summaryMessage)
 }
 
 async function handleRecluster(stateName) {
@@ -700,6 +800,50 @@ h2 {
   margin: 0.5rem 0 0 0;
   font-size: 0.85rem;
   color: #6b7280;
+}
+
+/* Bulk Actions */
+.bulk-actions {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f0f9ff;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.btn-geocode-all {
+  padding: 0.75rem 1.5rem;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 250px;
+}
+
+.btn-geocode-all:hover:not(:disabled) {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+}
+
+.btn-geocode-all:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.progress-text {
+  margin: 0.75rem 0 0 0;
+  font-size: 0.9rem;
+  color: #1e40af;
+  font-weight: 500;
+  font-style: italic;
 }
 
 .state-table-container {
