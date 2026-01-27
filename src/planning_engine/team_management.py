@@ -46,9 +46,19 @@ def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
     Returns:
         List of Team objects
     """
+    import logging
+    from .paths import get_current_username
+    
+    logger = logging.getLogger(__name__)
+    
     teams_csv = get_teams_csv_path(workspace_name, state_abbr)
     
+    current_username = get_current_username()
+    logger.info(f"load_teams: workspace={workspace_name}, state={state_abbr}, username_context={current_username}")
+    logger.info(f"load_teams: teams_csv={teams_csv}, exists={teams_csv.exists()}")
+    
     if not teams_csv.exists():
+        logger.info(f"load_teams: teams.csv does not exist, returning empty list")
         return []
     
     try:
@@ -89,9 +99,11 @@ def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
             
             teams.append(Team(**team_data))
         
+        logger.info(f"load_teams: successfully loaded {len(teams)} teams")
         return teams
     
     except Exception as e:
+        logger.error(f"load_teams: Failed to load teams from {teams_csv}: {str(e)}", exc_info=True)
         raise ValueError(f"Failed to load teams from {teams_csv}: {str(e)}")
 
 
@@ -106,7 +118,16 @@ def save_teams(workspace_name: str, state_abbr: str, teams: List[Team]) -> Path:
     Returns:
         Path to the saved teams.csv file
     """
+    import logging
+    from .paths import get_current_username
+    
+    logger = logging.getLogger(__name__)
+    
     teams_csv = get_teams_csv_path(workspace_name, state_abbr)
+    current_username = get_current_username()
+    
+    logger.info(f"save_teams: workspace={workspace_name}, state={state_abbr}, num_teams={len(teams)}, username_context={current_username}")
+    logger.info(f"save_teams: saving to {teams_csv}")
     
     if not teams:
         # If no teams, create empty file with headers
@@ -122,6 +143,7 @@ def save_teams(workspace_name: str, state_abbr: str, teams: List[Team]) -> Path:
     
     # Save to CSV
     df.to_csv(teams_csv, index=False)
+    logger.info(f"save_teams: successfully saved {len(teams)} teams to {teams_csv}")
     
     return teams_csv
 
@@ -140,10 +162,20 @@ def add_team(workspace_name: str, state_abbr: str, team: Team) -> Team:
     Raises:
         ValueError: If team_id already exists
     """
+    import logging
+    from .paths import get_current_username
+    
+    logger = logging.getLogger(__name__)
+    
+    current_username = get_current_username()
+    logger.info(f"add_team: workspace={workspace_name}, state={state_abbr}, team_id={team.team_id}, username_context={current_username}")
+    
     teams = load_teams(workspace_name, state_abbr)
+    logger.info(f"add_team: loaded {len(teams)} existing teams")
     
     # Check for duplicate team_id
     if any(t.team_id == team.team_id for t in teams):
+        logger.error(f"add_team: duplicate team_id={team.team_id}")
         raise ValueError(f"Team with ID '{team.team_id}' already exists")
     
     # Set created_date if not provided
@@ -151,7 +183,10 @@ def add_team(workspace_name: str, state_abbr: str, team: Team) -> Team:
         team.created_date = date.today()
     
     teams.append(team)
-    save_teams(workspace_name, state_abbr, teams)
+    logger.info(f"add_team: appended team, now have {len(teams)} teams")
+    
+    saved_path = save_teams(workspace_name, state_abbr, teams)
+    logger.info(f"add_team: saved teams to {saved_path}")
     
     return team
 

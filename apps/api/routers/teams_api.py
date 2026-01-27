@@ -42,10 +42,29 @@ def list_teams(workspace_name: str, state_abbr: str, current_user: UserInDB = De
     
     Returns list of teams with their details.
     """
+    import logging
+    from planning_engine.paths import get_current_username
+    from planning_engine.team_management import get_teams_csv_path
+    
+    logger = logging.getLogger(__name__)
+    
     try:
+        # Log user context and path information
+        current_username = get_current_username()
+        teams_path = get_teams_csv_path(workspace_name, state_abbr)
+        
+        logger.info(f"LIST_TEAMS: user={current_user.username}, username_context={current_username}")
+        logger.info(f"LIST_TEAMS: workspace={workspace_name}, state={state_abbr}")
+        logger.info(f"LIST_TEAMS: teams_path={teams_path}")
+        logger.info(f"LIST_TEAMS: path_exists={teams_path.exists()}")
+        
         teams = load_teams(workspace_name, state_abbr)
+        
+        logger.info(f"LIST_TEAMS: loaded {len(teams)} teams")
+        
         return TeamListResponse(teams=teams, total_teams=len(teams))
     except Exception as e:
+        logger.error(f"LIST_TEAMS ERROR: {str(e)}", exc_info=True)
         return {"error": str(e), "teams": [], "total_teams": 0}
 
 
@@ -56,10 +75,26 @@ def create_team(workspace_name: str, state_abbr: str, team: dict, current_user: 
     
     If team_id is not provided, it will be auto-generated.
     """
+    import logging
+    from planning_engine.paths import get_current_username
+    from planning_engine.team_management import get_teams_csv_path
+    
+    logger = logging.getLogger(__name__)
+    
     try:
+        # Log user context and path information
+        current_username = get_current_username()
+        teams_path = get_teams_csv_path(workspace_name, state_abbr)
+        
+        logger.info(f"CREATE_TEAM: user={current_user.username}, username_context={current_username}")
+        logger.info(f"CREATE_TEAM: workspace={workspace_name}, state={state_abbr}")
+        logger.info(f"CREATE_TEAM: teams_path={teams_path}")
+        logger.info(f"CREATE_TEAM: team_data={team}")
+        
         # Auto-generate team_id if not provided
         if not team.get('team_id'):
             team['team_id'] = generate_team_id(workspace_name, state_abbr)
+            logger.info(f"CREATE_TEAM: generated team_id={team['team_id']}")
         
         # Set created_date if not provided
         if not team.get('created_date'):
@@ -71,11 +106,16 @@ def create_team(workspace_name: str, state_abbr: str, team: dict, current_user: 
         # Add team
         added_team = add_team(workspace_name, state_abbr, team_obj)
         
+        logger.info(f"CREATE_TEAM: successfully created team_id={added_team.team_id}")
+        logger.info(f"CREATE_TEAM: saved to path={teams_path}")
+        
         return {"success": True, "team": added_team}
     
     except ValueError as e:
+        logger.error(f"CREATE_TEAM ValueError: {str(e)}")
         return {"success": False, "error": str(e)}
     except Exception as e:
+        logger.error(f"CREATE_TEAM Exception: {str(e)}", exc_info=True)
         return {"success": False, "error": f"Failed to create team: {str(e)}"}
 
 
