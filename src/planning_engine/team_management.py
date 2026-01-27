@@ -92,10 +92,21 @@ def load_teams(workspace_name: str, state_abbr: str) -> List[Team]:
             else:
                 team_data['assigned_clusters'] = None
             
-            # Handle optional string fields
-            for field in ['contact_name', 'contact_phone', 'contact_email', 'notes']:
-                if field in team_data and pd.isna(team_data[field]):
-                    team_data[field] = "" if field == 'notes' else None
+            # Handle optional string fields - convert to string if present, None if missing
+            for field in ['contact_name', 'contact_phone', 'contact_email']:
+                if field in team_data:
+                    if pd.isna(team_data[field]):
+                        team_data[field] = None
+                    else:
+                        # Convert to string (handles case where pandas reads phone as int)
+                        team_data[field] = str(team_data[field])
+            
+            # Handle notes field - always a string, never None
+            if 'notes' in team_data:
+                if pd.isna(team_data['notes']):
+                    team_data['notes'] = ""
+                else:
+                    team_data['notes'] = str(team_data['notes'])
             
             teams.append(Team(**team_data))
         
