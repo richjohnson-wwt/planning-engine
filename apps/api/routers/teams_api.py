@@ -212,7 +212,7 @@ async def generate_team_schedule(
     2. The team exists in teams.csv
     3. The team has assigned routes in the planning result
     """
-    from planning_engine.team_schedule import generate_team_schedule_pdf, generate_team_schedule_text
+    from planning_engine.team_schedule_csv import generate_team_schedule_csv
     
     try:
         # Create temporary file
@@ -221,33 +221,16 @@ async def generate_team_schedule(
         # Sanitize team_id for filename (replace commas with underscores to avoid HTTP header issues)
         safe_team_id = team_id.replace(',', '_')
         
-        # Toggle between PDF and Text formats for demo
-        use_pdf = False  # Set to False to demo text format
-        
-        print(f"DEBUG: use_pdf = {use_pdf}")  # Debug logging
-        
-        if use_pdf:
-            # Generate PDF
-            filename = f"schedule_{safe_team_id}_{timestamp}.pdf"
-            file_path = temp_dir / filename
-            success = generate_team_schedule_pdf(
-                workspace_name,
-                state_abbr,
-                team_id,
-                file_path
-            )
-            media_type = "application/pdf"
-        else:
-            # Generate Text
-            filename = f"schedule_{safe_team_id}_{timestamp}.txt"
-            file_path = temp_dir / filename
-            success = generate_team_schedule_text(
-                workspace_name,
-                state_abbr,
-                team_id,
-                file_path
-            )
-            media_type = "text/plain"
+        # Generate CSV
+        filename = f"schedule_{safe_team_id}_{timestamp}.csv"
+        file_path = temp_dir / filename
+        success = generate_team_schedule_csv(
+            workspace_name,
+            state_abbr,
+            team_id,
+            file_path
+        )
+        media_type = "text/csv"
         
         if not success:
             raise HTTPException(
